@@ -13,7 +13,7 @@ The core goal is simple: reduce the friction of working across too many apps, to
 
 Working product language:
 - **Chatbooks** for chat + notebook workflows
-- **Workspace / lane** for parallel contexts
+- **Lane** for parallel contexts
 - **Projects** and **tasks** for structured work
 - **Artifacts** for persistent files and file chunks
 - **Agents** for scheduled or delegated workflows
@@ -28,7 +28,7 @@ Current workflow is spread across multiple apps and devices:
 
 That split makes it hard to:
 - keep context together
-- work on multiple threads at once
+- work on multiple lanes at once
 - turn notes or messages into action
 - keep long-running work visible
 - use agents without losing control
@@ -54,7 +54,7 @@ The system should feel like a command center, not a generic app suite.
 4. **Local-first.** Core work happens locally first, with sync later if needed.
 5. **Simple first.** v1 should be narrow and useful.
 6. **Human controlled.** Agents can act, but permissions and approval gates matter.
-7. **Parallel by design.** The system must support multiple active workstreams.
+7. **Parallel by design.** The system must support multiple active lanes.
 8. **KISS.** Avoid giant abstraction layers that do not help the solo user.
 
 ## 5. Target user
@@ -69,7 +69,7 @@ Future user:
 
 ### Primary goals
 - unify chat, terminal, and task/project management in one place
-- make fast switching between workstreams easy
+- make fast switching between lanes easy
 - support real execution, not mocked workflows
 - support agent-assisted workflows with permissions
 - keep work visible and persistent
@@ -114,8 +114,8 @@ A real running execution unit managed by the runtime spine.
 ### Agent
 A workflow actor that can run scheduled or permissioned actions.
 
-### Workspace / lane
-A working context for one stream of effort, with its own visible layout and active items.
+### Lane
+A working context for one effort, with its own visible layout and active items.
 
 ### Chatbook
 A notebook-like chat surface where messages, cells, outputs, and linked notes live together.
@@ -124,7 +124,7 @@ A notebook-like chat surface where messages, cells, outputs, and linked notes li
 
 ### 9.1 Chatbooks
 Chat + notebook hybrid. Supports:
-- threaded messages
+- messages (with reply nesting)
 - editable cells
 - shell/code execution cells
 - outputs linked back into the workspace
@@ -201,7 +201,7 @@ Rules:
 ## 12. Success criteria
 
 For v1, the product is successful if the user can:
-- keep multiple workstreams open without losing context
+- keep multiple lanes open without losing context
 - move from chat to terminal to task without app switching
 - turn a thought into a task fast
 - run useful agent workflows with clear control
