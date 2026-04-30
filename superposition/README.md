@@ -1,6 +1,6 @@
 # Superposition
 
-Local-first production workspace. Combines chat, terminal, tasks, agents, and dashboards.
+Local-first production environment. Combines chat, terminal, tasks, agents, and dashboards.
 
 ## Quick Start
 
