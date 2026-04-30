@@ -91,7 +91,7 @@ Relationships:
 - has many tasks
 - has many artifacts
 - has many runs
-- may have a lane/workspace association
+- may have a lane association
 
 ### 4.2 Task
 A unit of actionable work.
@@ -186,7 +186,7 @@ Used for:
 
 Not used as the only source of truth for v1.
 
-### 4.8 Workspace / lane
+### 4.8 Lane
 A layout and context container.
 
 Fields:
@@ -331,7 +331,7 @@ Initial panels:
 - Activity
 - Artifacts
 
-### 9.4 Workspace / lane model
+### 9.4 Lane model
 Each lane stores:
 - active project
 - open chatbook
