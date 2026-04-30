@@ -48,7 +48,6 @@ class Task(Base):
     project = relationship("Project", back_populates="tasks")
     artifacts = relationship("Artifact", back_populates="task", cascade="all, delete-orphan")
     assigned_agent = relationship("Agent", back_populates="assigned_tasks")
-    runs = relationship("Run", back_populates="task", cascade="all, delete-orphan")
 
 
 class Artifact(Base):
@@ -99,8 +98,6 @@ class Process(Base):
     task_id = Column(String(36), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
     lane_id = Column(String(36), nullable=True)
 
-    project = relationship("Project", back_populates="runs")
-    task = relationship("Task", back_populates="runs")
     runs = relationship("Run", back_populates="process", cascade="all, delete-orphan")
 
 
