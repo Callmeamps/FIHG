@@ -1,0 +1,32 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+/ios/
+/mac/
+/windows/
+/linux/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.idea/
+.vscode/
+*.db
+*.sqlite
+*.log
+.coverage
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+superposition/.env
+
+# OS / IDE
+.DS_Store
+Thumbs.db
