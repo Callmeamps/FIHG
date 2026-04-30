@@ -1,41 +1,28 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Text, Integer, DateTime, JSON, ForeignKey, MetaData
+    Column, String, Text, Integer, DateTime, JSON, ForeignKey
 )
-from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import relationship
 
 from .db import Base
 
-# Naming convention for constraints (optional)
-# convention = {
-#     "ix": "ix_%(column_0_label)s",
-#     "uq": "uq_%(table_name)s_%(column_0_name)s",
-#     "ck": "ck_%(table_name)s_%(constraint_name)s",
-#     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-#     "pk": "pk_%(table_name)s"
-# }
-# Base = declarative_base(metadata=MetaData(naming_convention=convention))
-# Already defined in db.py
-
 def generate_uuid():
-    return uuid.uuid4()
+    return str(uuid.uuid4())
 
 class Project(Base):
     __tablename__ = "projects"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    status = Column(String, nullable=False, default="active")  # active, paused, archived
-    priority = Column(Integer, nullable=False, default=2)  # 0-4 (0=critical, 2=medium, 4=backlog)
+    status = Column(String, nullable=False, default="active")
+    priority = Column(Integer, nullable=False, default=2)
     urgency = Column(Integer, nullable=False, default=2)
     risk = Column(Integer, nullable=False, default=2)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # relationships
     tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
     artifacts = relationship("Artifact", back_populates="project", cascade="all, delete-orphan")
     runs = relationship("Run", back_populates="project", cascade="all, delete-orphan")
@@ -45,20 +32,19 @@ class Project(Base):
 class Task(Base):
     __tablename__ = "tasks"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True, default=generate_uuid)
-    project_id = Column(PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     title = Column(String, nullable=False)
-    status = Column(String, nullable=False, default="todo")  # todo, in_progress, done, blocked
+    status = Column(String, nullable=False, default="todo")
     priority = Column(Integer, nullable=False, default=2)
     urgency = Column(Integer, nullable=False, default=2)
     risk = Column(Integer, nullable=False, default=2)
     due_at = Column(DateTime, nullable=True)
-    assigned_agent_id = Column(PGUUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
-    approval_state = Column(String, nullable=True)  # pending, approved, rejected
-    created_from_ref = Column(String, nullable=True)  # reference to source (message_id, cell_id)
+    assigned_agent_id = Column(String(36), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    approval_state = Column(String, nullable=True)
+    created_from_ref = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # relationships
     project = relationship("Project", back_populates="tasks")
     artifacts = relationship("Artifact", back_populates="task", cascade="all, delete-orphan")
     assigned_agent = relationship("Agent", back_populates="assigned_tasks")
@@ -68,19 +54,18 @@ class Task(Base):
 class Artifact(Base):
     __tablename__ = "artifacts"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True, default=generate_uuid)
-    project_id = Column(PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    task_id = Column(PGUUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
-    kind = Column(String, nullable=False)  # file, snippet, chunk, output, patch, note
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    task_id = Column(String(36), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    kind = Column(String, nullable=False)
     title = Column(String, nullable=False)
     content_text = Column(Text, nullable=True)
     file_path = Column(String, nullable=True)
-    hash = Column(String, nullable=True)  # checksum (sha256 etc)
-    source_ref = Column(String, nullable=True)  # e.g., chatbook_message_id, run_id
-    tags = Column(JSON, nullable=True)  # array of tags
+    hash = Column(String, nullable=True)
+    source_ref = Column(String, nullable=True)
+    tags = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # relationships
     project = relationship("Project", back_populates="artifacts")
     task = relationship("Task", back_populates="artifacts")
 
@@ -88,15 +73,14 @@ class Artifact(Base):
 class Agent(Base):
     __tablename__ = "agents"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String, nullable=False)
-    mode = Column(String, nullable=False)  # fulltime, parttime, temporary
-    schedule = Column(JSON, nullable=True)  # cron-like schedule dict
-    capability_mask = Column(JSON, nullable=True)  # list of capabilities or permissions
-    parent_scope = Column(PGUUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
-    status = Column(String, nullable=False, default="idle")  # idle, running, paused
+    mode = Column(String, nullable=False)
+    schedule = Column(JSON, nullable=True)
+    capability_mask = Column(JSON, nullable=True)
+    parent_scope = Column(String(36), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=False, default="idle")
 
-    # relationships
     children = relationship("Agent", backref="parent", remote_side=[id])
     assigned_tasks = relationship("Task", back_populates="assigned_agent")
     runs = relationship("Run", back_populates="actor", cascade="all, delete-orphan")
@@ -105,17 +89,16 @@ class Agent(Base):
 class Process(Base):
     __tablename__ = "processes"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True, default=generate_uuid)
-    type = Column(String, nullable=False)  # terminal, agent_job, etc.
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    type = Column(String, nullable=False)
     command = Column(String, nullable=False)
     pid = Column(Integer, nullable=True)
-    status = Column(String, nullable=False, default="starting")  # starting, running, exited, error
-    tty_info = Column(JSON, nullable=True)  # e.g., session id, row/col, etc.
-    project_id = Column(PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
-    task_id = Column(PGUUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
-    lane_id = Column(PGUUID(as_uuid=True), nullable=True)  # lane reference (not FK to allow early creation)
+    status = Column(String, nullable=False, default="starting")
+    tty_info = Column(JSON, nullable=True)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    task_id = Column(String(36), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    lane_id = Column(String(36), nullable=True)
 
-    # relationships
     project = relationship("Project", back_populates="runs")
     task = relationship("Task", back_populates="runs")
     runs = relationship("Run", back_populates="process", cascade="all, delete-orphan")
@@ -124,32 +107,31 @@ class Process(Base):
 class Run(Base):
     __tablename__ = "runs"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True, default=generate_uuid)
-    process_id = Column(PGUUID(as_uuid=True), ForeignKey("processes.id", ondelete="CASCADE"), nullable=False)
-    actor_id = Column(PGUUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
-    input = Column(JSON, nullable=True)  # input data for the run
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    process_id = Column(String(36), ForeignKey("processes.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(String(36), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    input = Column(JSON, nullable=True)
     output = Column(Text, nullable=True)
-    status = Column(String, nullable=False)  # success, failure, cancelled
+    status = Column(String, nullable=False)
     started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     finished_at = Column(DateTime, nullable=True)
 
-    # relationships
     process = relationship("Process", back_populates="runs")
     actor = relationship("Agent", back_populates="runs")
-    project = relationship("Project", back_populates="runs")  # denormalized via process?
+    project = relationship("Project", back_populates="runs")
 
 
 class Lane(Base):
     __tablename__ = "lanes"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     title = Column(String, nullable=False)
-    active_project_id = Column(PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    active_project_id = Column(String(36), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     layout_state = Column(JSON, nullable=True)
     pinned_panels = Column(JSON, nullable=True)
     recent_items = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # relationships
     project = relationship("Project", back_populates="lanes")

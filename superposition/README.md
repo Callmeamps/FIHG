@@ -4,43 +4,26 @@ Local-first production workspace. Combines chat, terminal, tasks, agents, and da
 
 ## Quick Start
 
-1. **Start PostgreSQL** (choose one):
-
-   Using Docker (recommended):
-   ```bash
-   docker compose up -d
-   ```
-
-   Or ensure a PostgreSQL instance is running at `localhost:5432` with:
-   - database: `superposition`
-   - user: `postgres`
-   - password: `postgres`
-
-2. **Install dependencies**:
-
+1. **Install dependencies**:
    ```bash
    uv sync
    ```
 
-3. **Run the API server**:
-
+2. **Run the API server**:
    ```bash
    uv run main.py
    ```
+   Server starts at http://127.0.0.1:8000. SQLite database `superposition.db` created on startup.
 
-   Server starts at http://127.0.0.1:8000
-
-4. **Verify health**:
-
+3. **Verify health**:
    ```bash
    curl http://127.0.0.1:8000/health
    ```
-
    Expected response: `{"status":"ok"}`
 
 ## Development
 
-- API docs: http://127.0.0.1:8000/docs (Swagger UI)
+- API docs: http://127.0.0.1:8000/docs
 - WebSocket: `ws://127.0.0.1:8000/ws`
 - Trigger test event: `curl -X POST http://127.0.0.1:8000/test-event`
 
@@ -50,18 +33,15 @@ Local-first production workspace. Combines chat, terminal, tasks, agents, and da
 pytest
 ```
 
-Requires PostgreSQL running.
-
 ## Project Structure
 
-- `main.py`: FastAPI app, health, WebSocket, test-event.
+- `main.py`: FastAPI app, health, WebSocket.
 - `superposition/`: core package (models, db).
 - `tests/`: pytest suite.
-- `docker-compose.yml`: dev PostgreSQL.
 
 ## Notes
 
-- Schema auto-created on startup via `Base.metadata.create_all`.
-- Event streaming: PostgreSQL NOTIFY on channel `superposition_events` broadcasts to WS clients.
+- Uses SQLite + `aiosqlite` for local data.
+- Event streaming: In-memory broadcast to WS clients (no NOTIFY/Docker required).
 - Design doc: `agent/superposition_design_doc.md`
 - PRD: `agent/superposition_prd.md`

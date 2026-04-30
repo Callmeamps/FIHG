@@ -9,9 +9,6 @@ from sqlalchemy import text
 # Import models to register them with Base.metadata
 import superposition.models  # noqa: F401
 
-# =========================
-# WebSocket Connection Manager
-# =========================
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
@@ -29,80 +26,21 @@ class ConnectionManager:
             try:
                 await connection.send_json(message)
             except Exception:
-                # Optionally remove dead connections
                 pass
 
-# =========================
-# PostgreSQL NOTIFY Listener
-# =========================
-async def handle_notification(connection, pid, channel, payload):
-    """Callback for asyncpg NOTIFY events."""
-    try:
-        data = json.loads(payload)
-    except Exception:
-        data = payload
-    manager = app.state.ws_manager
-    await manager.broadcast({
-        "type": "notification",
-        "channel": channel,
-        "payload": data,
-        "pid": pid
-    })
-
-async def pg_notifier(app: FastAPI):
-    """Background task that listens to Postgres NOTIFY events and broadcasts to WS clients."""
-    from superposition.db import engine as db_engine
-    conn = None
-    while True:
-        try:
-            conn = await db_engine.connect()
-            raw = conn.connection  # asyncpg.Connection
-            await raw.add_listener('superposition_events', handle_notification)
-            # Keep the task alive; the listener runs in the background
-            while True:
-                await asyncio.sleep(3600)
-        except Exception as e:
-            print(f"Notifier error: {e}. Reconnecting in 5s...")
-            await asyncio.sleep(5)
-        finally:
-            if conn:
-                await conn.close()
-
-# =========================
-# FastAPI Lifespan
-# =========================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create DB tables
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-    except Exception as e:
-        print(f"Warning: database not available on startup: {e}")
-
-    # Initialize WS manager
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
     app.state.ws_manager = ConnectionManager()
-
-    # Start NOTIFIER background task
-    notifier_task = asyncio.create_task(pg_notifier(app))
-    app.state.notifier_task = notifier_task
-
-    try:
-        yield
-    finally:
-        # Shutdown
-        notifier_task.cancel()
-        try:
-            await notifier_task
-        except asyncio.CancelledError:
-            pass
-        await engine.dispose()
+    
+    yield
+    await engine.dispose()
 
 app = FastAPI(title="Superposition", version="0.1.0", lifespan=lifespan)
 
-# =========================
-# Health Endpoint
-# =========================
 @app.get("/health")
 async def health(session: AsyncSession = Depends(get_session)):
     try:
@@ -111,9 +49,6 @@ async def health(session: AsyncSession = Depends(get_session)):
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
-# =========================
-# WebSocket Endpoint
-# =========================
 def get_manager() -> ConnectionManager:
     return app.state.ws_manager
 
@@ -122,25 +57,16 @@ async def websocket_endpoint(websocket: WebSocket, manager: ConnectionManager = 
     await manager.connect(websocket)
     try:
         while True:
-            # Receive and ignore incoming; keep connection alive
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-# =========================
-# Test Event Endpoint (dev only)
-# =========================
 @app.post("/test-event")
-async def test_event(session: AsyncSession = Depends(get_session)):
-    """Send a test NOTIFY event to verify WS + NOTIFY integration."""
+async def test_event(manager: ConnectionManager = Depends(get_manager)):
+    """Simple in-memory broadcast for testing (SQLite no NOTIFY)."""
     event = {"type": "test", "message": "hello", "timestamp": asyncio.get_event_loop().time()}
-    payload = json.dumps(event)
-    await session.execute(text("NOTIFY superposition_events, :payload"), {"payload": payload})
-    await session.commit()
+    await manager.broadcast(event)
     return {"status": "notified", "event": event}
-
-# Placeholder: include routers later
-# from superposition.routers import projects, tasks, artifacts
 
 if __name__ == "__main__":
     import uvicorn

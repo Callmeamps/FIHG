@@ -4,7 +4,7 @@
 - [x] Set up Python project structure (uv, FastAPI, SQLAlchemy, psycopg)
 - [x] Define and apply Postgres schema (projects, tasks, artifacts, etc.)
 - [x] Build core service with healthcheck endpoint and DB connection
-- [ ] Verify database connectivity and table creation (blocked: start Postgres via `docker compose up -d`)
+- [ ] Verify database connectivity and table creation (SQLite)
 - [x] Add basic event streaming (WebSocket + LISTEN/NOTIFY plan)
 - [x] Write simple tests for core models and API
 
