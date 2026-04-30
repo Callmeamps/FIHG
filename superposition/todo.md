@@ -35,7 +35,7 @@
 ## Infrastructure
 - [ ] Set up Godot project structure (scenes, UI components)
 - [ ] Establish Godot ↔ Python API contract (HTTP/WebSocket)
-- [ ] Add Docker Compose for local dev (Python + Postgres)
+- [x] Remove Docker Compose for local dev (Python + Postgres)
 - [ ] Configure development environment scripts
 
 ## Ubiquitous Language Refactor
