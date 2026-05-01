@@ -1,3 +1,8 @@
+import os
+
+# Set test API key before anything else loads
+os.environ["API_KEY"] = "dev"
+
 import pytest
 import pytest_asyncio
 import asyncio
@@ -6,6 +11,16 @@ import asyncio
 import superposition.models  # noqa: F401
 
 from superposition.db import engine, Base
+from main import verify_api_key
+
+# Bypass auth in all tests
+@pytest.fixture(scope="session", autouse=True)
+def bypass_auth():
+    from main import app
+    app.dependency_overrides[verify_api_key] = lambda: None
+    yield
+    app.dependency_overrides.clear()
+
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_database():
@@ -14,6 +29,7 @@ async def setup_database():
         await conn.run_sync(Base.metadata.create_all)
     yield
     # Could drop tables here if desired
+
 
 @pytest.fixture(scope="session")
 def event_loop():

@@ -1,6 +1,7 @@
+import os
+import time
 from fastapi.testclient import TestClient
 from main import app
-import time
 
 def test_health():
     with TestClient(app) as client:
@@ -396,3 +397,73 @@ def test_artifact_source_ref_valid():
         })
         assert r.status_code == 200, r.text
         assert r.json()["source_ref"] == f"cell:{p['id']}"
+
+
+def test_auth_required_without_key_env():
+    """Without API_KEY set, all endpoints are open."""
+    os.environ.pop("API_KEY", None)
+    import importlib
+    import main as main_mod
+    importlib.reload(main_mod)
+    app = main_mod.app
+    with TestClient(app, raise_server_exceptions=False) as client:
+        r = client.post("/projects", json={"title": "Auth Test"})
+        assert r.status_code == 200  # open when no key
+
+
+def test_auth_rejects_missing_key():
+    """With API_KEY set, requests without X-API-Key get 401."""
+    import os
+    os.environ["API_KEY"] = "testkey"
+    import importlib
+    import main as main_mod
+    importlib.reload(main_mod)
+    app = main_mod.app
+    with TestClient(app, raise_server_exceptions=False) as client:
+        r = client.post("/projects", json={"title": "Should Fail"})
+        assert r.status_code == 401
+        assert "X-API-Key" in r.json()["detail"]
+
+
+def test_auth_rejects_wrong_key():
+    """With API_KEY set, wrong key gets 403."""
+    import os
+    os.environ["API_KEY"] = "testkey"
+    import importlib
+    import main as main_mod
+    importlib.reload(main_mod)
+    app = main_mod.app
+    with TestClient(app, raise_server_exceptions=False) as client:
+        r = client.post("/projects", json={"title": "Should Fail"},
+                        headers={"X-API-Key": "wrongkey"})
+        assert r.status_code == 403
+        assert "Invalid" in r.json()["detail"]
+
+
+def test_auth_accepts_correct_key():
+    """With API_KEY set, correct key grants access."""
+    import os
+    os.environ["API_KEY"] = "testkey"
+    import importlib
+    import main as main_mod
+    importlib.reload(main_mod)
+    app = main_mod.app
+    with TestClient(app, raise_server_exceptions=False) as client:
+        r = client.post("/projects", json={"title": "Should Pass"},
+                        headers={"X-API-Key": "testkey"})
+        assert r.status_code == 200
+        assert r.json()["title"] == "Should Pass"
+
+
+def test_health_always_open():
+    """Health endpoint never requires auth, even with API_KEY set."""
+    import os
+    os.environ["API_KEY"] = "testkey"
+    import importlib
+    import main as main_mod
+    importlib.reload(main_mod)
+    app = main_mod.app
+    with TestClient(app, raise_server_exceptions=False) as client:
+        r = client.get("/health")
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"

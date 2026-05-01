@@ -1,11 +1,17 @@
 import asyncio
 import json
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, UTC
 from typing import Optional
 
-from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, Header, Query, Request
+from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from superposition.db import engine, Base, get_session
 from superposition.terminal import TerminalRuntime
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,6 +97,30 @@ class ExecuteCell(BaseModel):
     source: str
 
 
+# --- Auth & rate limiting ---------------------------------------------------
+
+limiter = Limiter(key_func=get_remote_address, default_limits=[os.environ.get("RATE_LIMIT", "60/min")])
+
+
+def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")) -> str:
+    """Validate X-API-Key against the API_KEY env var. Open when API_KEY is unset."""
+    api_key = os.environ.get("API_KEY", "")
+    if not api_key:
+        return "open"  # auth disabled when no key is configured
+    if x_api_key is None:
+        raise HTTPException(status_code=401, detail="X-API-Key header required")
+    if x_api_key != api_key:
+        raise HTTPException(status_code=403, detail="Invalid API key")
+    return x_api_key
+
+
+def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": f"Rate limit exceeded: {exc.detail}"},
+    )
+
+
 # --- Connection manager ----------------------------------------------------
 
 class ConnectionManager:
@@ -117,6 +147,9 @@ class ConnectionManager:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -161,20 +194,20 @@ async def health(session: AsyncSession = Depends(get_session)):
 # --- Projects --------------------------------------------------------------
 
 @app.get("/projects")
-async def list_projects(session: AsyncSession = Depends(get_session)):
+async def list_projects(_auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     result = await session.execute(select(Project).order_by(Project.created_at.desc()))
     return [{"id": p.id, "title": p.title, "status": p.status}
             for p in result.scalars().all()]
 
 @app.post("/projects")
-async def create_project(body: CreateProject, session: AsyncSession = Depends(get_session)):
+async def create_project(body: CreateProject, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     project = Project(title=body.title, description=body.description)
     session.add(project)
     await session.flush()
     return {"id": project.id, "title": project.title, "status": project.status}
 
 @app.get("/projects/{project_id}")
-async def get_project(project_id: str, session: AsyncSession = Depends(get_session)):
+async def get_project(project_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -182,7 +215,7 @@ async def get_project(project_id: str, session: AsyncSession = Depends(get_sessi
             "status": project.status, "created_at": project.created_at.isoformat() if project.created_at else None}
 
 @app.put("/projects/{project_id}")
-async def update_project(project_id: str, body: UpdateProject, session: AsyncSession = Depends(get_session)):
+async def update_project(project_id: str, body: UpdateProject, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -202,6 +235,7 @@ async def update_project(project_id: str, body: UpdateProject, session: AsyncSes
 async def list_tasks(
     project_id: Optional[str] = None,
     status: Optional[str] = None,
+    _auth: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session)
 ):
     stmt = select(Task).order_by(Task.created_at.desc())
@@ -216,14 +250,14 @@ async def list_tasks(
             for t in result.scalars().all()]
 
 @app.post("/tasks")
-async def create_task(body: CreateTask, session: AsyncSession = Depends(get_session)):
+async def create_task(body: CreateTask, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     task = Task(project_id=body.project_id, title=body.title, status=body.status)
     session.add(task)
     await session.flush()
     return {"id": task.id, "title": task.title, "status": task.status}
 
 @app.get("/tasks/{task_id}")
-async def get_task(task_id: str, session: AsyncSession = Depends(get_session)):
+async def get_task(task_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     task = await session.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -231,7 +265,7 @@ async def get_task(task_id: str, session: AsyncSession = Depends(get_session)):
             "project_id": task.project_id}
 
 @app.put("/tasks/{task_id}")
-async def update_task(task_id: str, body: UpdateTask, session: AsyncSession = Depends(get_session)):
+async def update_task(task_id: str, body: UpdateTask, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     task = await session.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -246,7 +280,7 @@ async def update_task(task_id: str, body: UpdateTask, session: AsyncSession = De
 # --- Chatbooks -------------------------------------------------------------
 
 @app.get("/chatbooks")
-async def list_chatbooks(project_id: Optional[str] = None, session: AsyncSession = Depends(get_session)):
+async def list_chatbooks(project_id: Optional[str] = None, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     stmt = select(Chatbook).order_by(Chatbook.updated_at.desc())
     if project_id:
         stmt = stmt.where(Chatbook.project_id == project_id)
@@ -256,14 +290,14 @@ async def list_chatbooks(project_id: Optional[str] = None, session: AsyncSession
             for cb in result.scalars().all()]
 
 @app.post("/chatbooks")
-async def create_chatbook(body: CreateChatbook, session: AsyncSession = Depends(get_session)):
+async def create_chatbook(body: CreateChatbook, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     cb = Chatbook(project_id=body.project_id, title=body.title)
     session.add(cb)
     await session.flush()
     return {"id": cb.id, "title": cb.title, "project_id": cb.project_id}
 
 @app.get("/chatbooks/{chatbook_id}")
-async def get_chatbook(chatbook_id: str, session: AsyncSession = Depends(get_session)):
+async def get_chatbook(chatbook_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     cb = await session.get(Chatbook, chatbook_id)
     if not cb:
         raise HTTPException(status_code=404, detail="Chatbook not found")
@@ -273,7 +307,7 @@ async def get_chatbook(chatbook_id: str, session: AsyncSession = Depends(get_ses
             "updated_at": cb.updated_at.isoformat() if cb.updated_at else None}
 
 @app.put("/chatbooks/{chatbook_id}")
-async def update_chatbook(chatbook_id: str, body: UpdateChatbook, session: AsyncSession = Depends(get_session)):
+async def update_chatbook(chatbook_id: str, body: UpdateChatbook, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     cb = await session.get(Chatbook, chatbook_id)
     if not cb:
         raise HTTPException(status_code=404, detail="Chatbook not found")
@@ -283,7 +317,7 @@ async def update_chatbook(chatbook_id: str, body: UpdateChatbook, session: Async
     return {"id": cb.id, "title": cb.title}
 
 @app.delete("/chatbooks/{chatbook_id}")
-async def delete_chatbook(chatbook_id: str, session: AsyncSession = Depends(get_session)):
+async def delete_chatbook(chatbook_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     cb = await session.get(Chatbook, chatbook_id)
     if not cb:
         raise HTTPException(status_code=404, detail="Chatbook not found")
@@ -292,7 +326,7 @@ async def delete_chatbook(chatbook_id: str, session: AsyncSession = Depends(get_
     return {"status": "deleted"}
 
 @app.get("/chatbooks/{chatbook_id}/messages")
-async def list_messages(chatbook_id: str, session: AsyncSession = Depends(get_session)):
+async def list_messages(chatbook_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     result = await session.execute(
         select(Message).where(Message.chatbook_id == chatbook_id).order_by(Message.created_at)
     )
@@ -301,7 +335,7 @@ async def list_messages(chatbook_id: str, session: AsyncSession = Depends(get_se
             for m in result.scalars().all()]
 
 @app.post("/chatbooks/{chatbook_id}/messages")
-async def send_message(chatbook_id: str, body: SendMessage, session: AsyncSession = Depends(get_session)):
+async def send_message(chatbook_id: str, body: SendMessage, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     chatbook = await session.get(Chatbook, chatbook_id)
     if not chatbook:
         raise HTTPException(status_code=404, detail="Chatbook not found")
@@ -313,13 +347,14 @@ async def send_message(chatbook_id: str, body: SendMessage, session: AsyncSessio
 
 # --- Terminal sessions -----------------------------------------------------
 
+@limiter.limit("10/min")
 @app.post("/terminal/spawn")
-async def terminal_spawn(body: SpawnTerminal, rt: TerminalRuntime = Depends(get_terminal_runtime)):
+async def terminal_spawn(request: Request, body: SpawnTerminal, _auth: str = Depends(verify_api_key), rt: TerminalRuntime = Depends(get_terminal_runtime)):
     sess = await rt.spawn(command=body.command or "/bin/bash")
     return {"session_id": sess.id, "pid": sess.pid, "status": sess.status}
 
 @app.post("/terminal/{session_id}/write")
-async def terminal_write(session_id: str, body: WriteTerminal, rt: TerminalRuntime = Depends(get_terminal_runtime)):
+async def terminal_write(session_id: str, body: WriteTerminal, _auth: str = Depends(verify_api_key), rt: TerminalRuntime = Depends(get_terminal_runtime)):
     try:
         await rt.write(session_id, body.data)
     except RuntimeError as e:
@@ -327,7 +362,7 @@ async def terminal_write(session_id: str, body: WriteTerminal, rt: TerminalRunti
     return {"status": "ok"}
 
 @app.post("/terminal/{session_id}/resize")
-async def terminal_resize(session_id: str, cols: int = Query(80), rows: int = Query(24), rt: TerminalRuntime = Depends(get_terminal_runtime)):
+async def terminal_resize(session_id: str, cols: int = Query(80), rows: int = Query(24), _auth: str = Depends(verify_api_key), rt: TerminalRuntime = Depends(get_terminal_runtime)):
     try:
         await rt.resize(session_id, cols, rows)
     except RuntimeError as e:
@@ -335,12 +370,12 @@ async def terminal_resize(session_id: str, cols: int = Query(80), rows: int = Qu
     return {"status": "ok"}
 
 @app.post("/terminal/{session_id}/close")
-async def terminal_close(session_id: str, rt: TerminalRuntime = Depends(get_terminal_runtime)):
+async def terminal_close(session_id: str, _auth: str = Depends(verify_api_key), rt: TerminalRuntime = Depends(get_terminal_runtime)):
     await rt.close(session_id)
     return {"status": "closed"}
 
 @app.get("/terminal/sessions")
-async def list_terminal_sessions(rt: TerminalRuntime = Depends(get_terminal_runtime)):
+async def list_terminal_sessions(_auth: str = Depends(verify_api_key), rt: TerminalRuntime = Depends(get_terminal_runtime)):
     return {"sessions": [{"id": s.id, "status": s.status, "pid": s.pid}
                          for s in rt.sessions.values()]}
 
@@ -348,7 +383,7 @@ async def list_terminal_sessions(rt: TerminalRuntime = Depends(get_terminal_runt
 # --- Artifacts --------------------------------------------------------------
 
 @app.post("/artifacts")
-async def create_artifact(body: CreateArtifact, session: AsyncSession = Depends(get_session)):
+async def create_artifact(body: CreateArtifact, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     project = await session.get(Project, body.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -371,6 +406,7 @@ async def create_artifact(body: CreateArtifact, session: AsyncSession = Depends(
 async def list_artifacts(
     project_id: Optional[str] = None,
     task_id: Optional[str] = None,
+    _auth: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session)
 ):
     stmt = select(Artifact).order_by(Artifact.created_at.desc())
@@ -385,7 +421,7 @@ async def list_artifacts(
             for a in result.scalars().all()]
 
 @app.get("/artifacts/{artifact_id}")
-async def get_artifact(artifact_id: str, session: AsyncSession = Depends(get_session)):
+async def get_artifact(artifact_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     artifact = await session.get(Artifact, artifact_id)
     if not artifact:
         raise HTTPException(status_code=404, detail="Artifact not found")
@@ -394,7 +430,7 @@ async def get_artifact(artifact_id: str, session: AsyncSession = Depends(get_ses
             "tags": artifact.tags, "project_id": artifact.project_id, "task_id": artifact.task_id}
 
 @app.put("/artifacts/{artifact_id}")
-async def update_artifact(artifact_id: str, body: UpdateArtifact, session: AsyncSession = Depends(get_session)):
+async def update_artifact(artifact_id: str, body: UpdateArtifact, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     artifact = await session.get(Artifact, artifact_id)
     if not artifact:
         raise HTTPException(status_code=404, detail="Artifact not found")
@@ -408,7 +444,7 @@ async def update_artifact(artifact_id: str, body: UpdateArtifact, session: Async
     return {"id": artifact.id, "title": artifact.title, "tags": artifact.tags}
 
 @app.delete("/artifacts/{artifact_id}")
-async def delete_artifact(artifact_id: str, session: AsyncSession = Depends(get_session)):
+async def delete_artifact(artifact_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     artifact = await session.get(Artifact, artifact_id)
     if not artifact:
         raise HTTPException(status_code=404, detail="Artifact not found")
@@ -456,6 +492,7 @@ async def _run_cell(source: str, language: str = "shell") -> tuple[str, str]:
 async def create_and_execute_cell(
     chatbook_id: str,
     body: ExecuteCell,
+    _auth: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session)
 ):
     """Create a cell, execute it, and store the result + Run record."""
@@ -518,7 +555,7 @@ async def create_and_execute_cell(
 
 
 @app.get("/chatbooks/{chatbook_id}/cells")
-async def list_cells(chatbook_id: str, session: AsyncSession = Depends(get_session)):
+async def list_cells(chatbook_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     result = await session.execute(
         select(Cell).where(Cell.chatbook_id == chatbook_id).order_by(Cell.index)
     )
@@ -533,6 +570,7 @@ async def list_cells(chatbook_id: str, session: AsyncSession = Depends(get_sessi
 async def update_cell(
     chatbook_id: str, cell_id: str,
     body: UpdateCell,
+    _auth: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session)
 ):
     cell = await session.get(Cell, cell_id)
@@ -546,7 +584,7 @@ async def update_cell(
     return {"id": cell.id, "language": cell.language, "source": cell.source}
 
 @app.delete("/chatbooks/{chatbook_id}/cells/{cell_id}")
-async def delete_cell(chatbook_id: str, cell_id: str, session: AsyncSession = Depends(get_session)):
+async def delete_cell(chatbook_id: str, cell_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
     cell = await session.get(Cell, cell_id)
     if not cell or cell.chatbook_id != chatbook_id:
         raise HTTPException(status_code=404, detail="Cell not found")
@@ -561,6 +599,7 @@ async def delete_cell(chatbook_id: str, cell_id: str, session: AsyncSession = De
 async def create_task_from_message(
     chatbook_id: str,
     message_id: str,
+    _auth: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_session)
 ):
     msg = await session.get(Message, message_id)
@@ -591,6 +630,13 @@ async def create_task_from_message(
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, manager: ConnectionManager = Depends(get_manager), rt: TerminalRuntime = Depends(get_terminal_runtime)):
+    # Authenticate via query param when API_KEY is set
+    api_key = os.environ.get("API_KEY", "")
+    if api_key:
+        provided = websocket.query_params.get("key", "")
+        if provided != api_key:
+            await websocket.close(code=4001, reason="Unauthorized")
+            return
     await manager.connect(websocket)
     try:
         while True:
@@ -616,7 +662,7 @@ async def websocket_endpoint(websocket: WebSocket, manager: ConnectionManager = 
 
 
 @app.post("/test-event")
-async def test_event(manager: ConnectionManager = Depends(get_manager)):
+async def test_event(_auth: str = Depends(verify_api_key), manager: ConnectionManager = Depends(get_manager)):
     """Simple in-memory broadcast for testing (SQLite no NOTIFY)."""
     event = {"type": "test", "message": "hello", "timestamp": asyncio.get_event_loop().time()}
     await manager.broadcast(event)
