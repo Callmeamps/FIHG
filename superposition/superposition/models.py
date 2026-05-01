@@ -89,6 +89,8 @@ class Agent(Base):
     capability_mask = Column(JSON, nullable=True)
     parent_scope = Column(String(36), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     status = Column(String, nullable=False, default="idle")
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     children = relationship("Agent", backref="parent", remote_side=[id])
     assigned_tasks = relationship("Task", back_populates="assigned_agent")
