@@ -256,6 +256,57 @@ async def health(session: AsyncSession = Depends(get_session)):
         return {"status": "error", "detail": str(e)}
 
 
+# --- Dashboard -------------------------------------------------------------
+
+@app.get("/dashboard")
+async def get_dashboard(
+    _auth: str = Depends(verify_api_key),
+    rt: TerminalRuntime = Depends(get_terminal_runtime),
+    session: AsyncSession = Depends(get_session)
+):
+    """Aggregate dashboard data: active projects, running terminals, queued agents, recent artifacts."""
+    # Active projects (5 most recent)
+    proj_result = await session.execute(
+        select(Project).order_by(Project.created_at.desc()).limit(5)
+    )
+    projects = [{"id": p.id, "title": p.title, "status": p.status}
+                for p in proj_result.scalars().all()]
+
+    # Running terminal sessions
+    sessions = []
+    for s in rt.sessions.values():
+        sessions.append({"id": s.id, "command": s.command, "pid": s.pid, "status": s.status})
+
+    # Queued agents
+    agent_result = await session.execute(
+        select(Agent).where(Agent.status.in_(["queued", "idle"])).limit(10)
+    )
+    agents = [{"id": a.id, "name": a.name, "status": a.status, "mode": a.mode}
+              for a in agent_result.scalars().all()]
+
+    # Recent artifacts (5 most recent)
+    art_result = await session.execute(
+        select(Artifact).order_by(Artifact.created_at.desc()).limit(5)
+    )
+    artifacts = [{"id": a.id, "title": a.title, "kind": a.kind, "project_id": a.project_id}
+                 for a in art_result.scalars().all()]
+
+    # Recent tasks
+    task_result = await session.execute(
+        select(Task).order_by(Task.created_at.desc()).limit(5)
+    )
+    tasks = [{"id": t.id, "title": t.title, "status": t.status, "project_id": t.project_id}
+             for t in task_result.scalars().all()]
+
+    return {
+        "projects": projects,
+        "running_terminals": sessions,
+        "queued_agents": agents,
+        "recent_artifacts": artifacts,
+        "recent_tasks": tasks,
+    }
+
+
 # --- Projects --------------------------------------------------------------
 
 @app.get("/projects")

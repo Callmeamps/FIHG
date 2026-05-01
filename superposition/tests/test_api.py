@@ -755,3 +755,33 @@ def test_run_not_found():
             else:
                 r = method(url)
             assert r.status_code == 404
+
+
+def test_dashboard():
+    with TestClient(app) as client:
+        # Create some data
+        r = client.post("/projects", json={"title": "Dashboard Project"})
+        pid = r.json()["id"]
+
+        r = client.post("/artifacts", json={
+            "project_id": pid, "title": "Test Artifact", "kind": "text"
+        })
+
+        r = client.post("/tasks", json={"project_id": pid, "title": "Test Task"})
+
+        # Get dashboard
+        r = client.get("/dashboard")
+        assert r.status_code == 200
+        data = r.json()
+        assert "projects" in data
+        assert "running_terminals" in data
+        assert "queued_agents" in data
+        assert "recent_artifacts" in data
+        assert "recent_tasks" in data
+        # Should have the data we created
+        assert any(p["title"] == "Dashboard Project" for p in data["projects"])
+        assert any(a["title"] == "Test Artifact" for a in data["recent_artifacts"])
+        assert any(t["title"] == "Test Task" for t in data["recent_tasks"])
+        # Queued agents should be empty (no queued agents created)
+        assert isinstance(data["queued_agents"], list)
+        assert isinstance(data["running_terminals"], list)
