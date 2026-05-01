@@ -546,3 +546,77 @@ def test_lane_not_found():
         assert r.status_code == 404
         r = client.delete("/lanes/fake-id")
         assert r.status_code == 404
+
+
+def test_agent_crud():
+    with TestClient(app) as client:
+        # Create agent
+        r = client.post("/agents", json={"name": "Coder", "mode": "auto", "status": "idle"})
+        assert r.status_code == 200
+        aid = r.json()["id"]
+        assert r.json()["name"] == "Coder"
+        assert r.json()["mode"] == "auto"
+        assert r.json()["status"] == "idle"
+
+        # List agents
+        r = client.get("/agents")
+        assert r.status_code == 200
+        assert any(a["id"] == aid for a in r.json())
+
+        # Get agent
+        r = client.get(f"/agents/{aid}")
+        assert r.status_code == 200
+        assert r.json()["name"] == "Coder"
+
+        # Update agent
+        r = client.put(f"/agents/{aid}", json={"name": "Senior Coder", "status": "busy"})
+        assert r.status_code == 200
+        assert r.json()["name"] == "Senior Coder"
+        assert r.json()["status"] == "busy"
+
+        # Set capability_mask and schedule
+        r = client.put(f"/agents/{aid}", json={
+            "capability_mask": {"shell": True, "python": False},
+            "schedule": {"cron": "0 9 * * *"}
+        })
+        assert r.status_code == 200
+
+        # Delete agent
+        r = client.delete(f"/agents/{aid}")
+        assert r.status_code == 200
+
+        # Not found
+        r = client.get(f"/agents/{aid}")
+        assert r.status_code == 404
+
+
+def test_agent_parent_hierarchy():
+    with TestClient(app) as client:
+        # Create parent agent
+        r = client.post("/agents", json={"name": "Parent Agent", "mode": "auto"})
+        assert r.status_code == 200
+        parent_id = r.json()["id"]
+
+        # Create child agent with parent_scope
+        r = client.post("/agents", json={"name": "Child Agent", "mode": "auto", "parent_scope": parent_id})
+        assert r.status_code == 200
+        child_id = r.json()["id"]
+
+        # Verify parent_scope is set
+        r = client.get(f"/agents/{child_id}")
+        assert r.json()["parent_scope"] == parent_id
+
+        # Invalid parent
+        r = client.post("/agents", json={"name": "Orphan", "mode": "auto", "parent_scope": "bad-id"})
+        assert r.status_code == 404
+        assert "Parent agent not found" in r.json()["detail"]
+
+
+def test_agent_not_found():
+    with TestClient(app) as client:
+        r = client.get("/agents/fake-id")
+        assert r.status_code == 404
+        r = client.put("/agents/fake-id", json={"name": "X"})
+        assert r.status_code == 404
+        r = client.delete("/agents/fake-id")
+        assert r.status_code == 404

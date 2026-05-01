@@ -105,6 +105,24 @@ class UpdateLane(BaseModel):
     recent_items: Optional[list] = None
 
 
+class CreateAgent(BaseModel):
+    name: str
+    mode: str
+    schedule: Optional[dict] = None
+    capability_mask: Optional[dict] = None
+    parent_scope: Optional[str] = None
+    status: str = "idle"
+
+
+class UpdateAgent(BaseModel):
+    name: Optional[str] = None
+    mode: Optional[str] = None
+    schedule: Optional[dict] = None
+    capability_mask: Optional[dict] = None
+    parent_scope: Optional[str] = None
+    status: Optional[str] = None
+
+
 class ExecuteCell(BaseModel):
     language: str = "shell"
     source: str
@@ -418,6 +436,76 @@ async def delete_lane(lane_id: str, _auth: str = Depends(verify_api_key), sessio
     if not lane:
         raise HTTPException(status_code=404, detail="Lane not found")
     await session.delete(lane)
+    await session.flush()
+    return {"status": "deleted"}
+
+
+# --- Agents -----------------------------------------------------------------
+
+@app.get("/agents")
+async def list_agents(_auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(Agent))
+    return [{"id": a.id, "name": a.name, "mode": a.mode, "status": a.status,
+             "parent_scope": a.parent_scope}
+            for a in result.scalars().all()]
+
+@app.post("/agents")
+async def create_agent(body: CreateAgent, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    if body.parent_scope:
+        parent = await session.get(Agent, body.parent_scope)
+        if not parent:
+            raise HTTPException(status_code=404, detail="Parent agent not found")
+    agent = Agent(
+        name=body.name,
+        mode=body.mode,
+        schedule=body.schedule,
+        capability_mask=body.capability_mask,
+        parent_scope=body.parent_scope,
+        status=body.status,
+    )
+    session.add(agent)
+    await session.flush()
+    return {"id": agent.id, "name": agent.name, "mode": agent.mode, "status": agent.status}
+
+@app.get("/agents/{agent_id}")
+async def get_agent(agent_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    agent = await session.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"id": agent.id, "name": agent.name, "mode": agent.mode,
+            "schedule": agent.schedule, "capability_mask": agent.capability_mask,
+            "parent_scope": agent.parent_scope, "status": agent.status}
+
+@app.put("/agents/{agent_id}")
+async def update_agent(agent_id: str, body: UpdateAgent, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    agent = await session.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if body.name is not None:
+        agent.name = body.name
+    if body.mode is not None:
+        agent.mode = body.mode
+    if body.schedule is not None:
+        agent.schedule = body.schedule
+    if body.capability_mask is not None:
+        agent.capability_mask = body.capability_mask
+    if body.parent_scope is not None:
+        if body.parent_scope != "":
+            parent = await session.get(Agent, body.parent_scope)
+            if not parent:
+                raise HTTPException(status_code=404, detail="Parent agent not found")
+        agent.parent_scope = body.parent_scope if body.parent_scope != "" else None
+    if body.status is not None:
+        agent.status = body.status
+    await session.flush()
+    return {"id": agent.id, "name": agent.name, "mode": agent.mode, "status": agent.status}
+
+@app.delete("/agents/{agent_id}")
+async def delete_agent(agent_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    agent = await session.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    await session.delete(agent)
     await session.flush()
     return {"status": "deleted"}
 
