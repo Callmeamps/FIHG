@@ -785,3 +785,117 @@ def test_dashboard():
         # Queued agents should be empty (no queued agents created)
         assert isinstance(data["queued_agents"], list)
         assert isinstance(data["running_terminals"], list)
+
+
+def test_approval_crud():
+    with TestClient(app) as client:
+        # Create agent first
+        r = client.post("/agents", json={"name": "Approval Agent", "mode": "manual"})
+        assert r.status_code == 200
+        agent_id = r.json()["id"]
+
+        # Create approval
+        r = client.post("/approvals", json={
+            "agent_id": agent_id,
+            "action_type": "run_shell",
+            "action_payload": {"command": "rm -rf /"},
+            "risk": 4,
+            "urgency": 2,
+            "priority": 3,
+        })
+        assert r.status_code == 200
+        approval_id = r.json()["id"]
+        assert r.json()["status"] == "pending"
+        assert r.json()["risk"] == 4
+
+        # List approvals
+        r = client.get("/approvals")
+        assert r.status_code == 200
+        assert any(a["id"] == approval_id for a in r.json())
+
+        # Filter by agent_id
+        r = client.get(f"/approvals?agent_id={agent_id}")
+        assert r.status_code == 200
+        assert any(a["id"] == approval_id for a in r.json())
+
+        # Filter by status
+        r = client.get("/approvals?status=pending")
+        assert r.status_code == 200
+        assert any(a["id"] == approval_id for a in r.json())
+
+        # Get approval detail
+        r = client.get(f"/approvals/{approval_id}")
+        assert r.status_code == 200
+        assert r.json()["action_type"] == "run_shell"
+        assert r.json()["action_payload"]["command"] == "rm -rf /"
+
+        # Approve
+        r = client.post(f"/approvals/{approval_id}/respond", json={
+            "decision": "approved",
+            "reason": "Safe in sandbox"
+        })
+        assert r.status_code == 200
+        assert r.json()["status"] == "approved"
+        assert r.json()["reason"] == "Safe in sandbox"
+        assert r.json()["responded_at"] is not None
+
+        # Cannot respond twice
+        r = client.post(f"/approvals/{approval_id}/respond", json={"decision": "denied"})
+        assert r.status_code == 409
+
+        # Deny another approval
+        r = client.post("/approvals", json={
+            "agent_id": agent_id, "action_type": "write_file",
+            "risk": 5, "urgency": 1, "priority": 5,
+        })
+        aid2 = r.json()["id"]
+        r = client.post(f"/approvals/{aid2}/respond", json={
+            "decision": "denied", "reason": "Too risky"
+        })
+        assert r.status_code == 200
+        assert r.json()["status"] == "denied"
+
+
+def test_approval_invalid_score():
+    with TestClient(app) as client:
+        r = client.post("/agents", json={"name": "Test", "mode": "auto"})
+        agent_id = r.json()["id"]
+
+        # Invalid risk score (> 5)
+        r = client.post("/approvals", json={
+            "agent_id": agent_id, "action_type": "x", "risk": 10
+        })
+        assert r.status_code == 422
+
+        # Invalid score (< 1)
+        r = client.post("/approvals", json={
+            "agent_id": agent_id, "action_type": "x", "risk": 0
+        })
+        assert r.status_code == 422
+
+
+def test_approval_invalid_agent():
+    with TestClient(app) as client:
+        r = client.post("/approvals", json={
+            "agent_id": "nonexistent", "action_type": "run"
+        })
+        assert r.status_code == 404
+        assert "Agent not found" in r.json()["detail"]
+
+
+def test_approval_not_found():
+    with TestClient(app) as client:
+        r = client.get("/approvals/fake-id")
+        assert r.status_code == 404
+        r = client.post("/approvals/fake-id/respond", json={"decision": "approved"})
+        assert r.status_code == 404
+
+
+def test_approval_invalid_decision():
+    with TestClient(app) as client:
+        r = client.post("/agents", json={"name": "Test", "mode": "auto"})
+        agent_id = r.json()["id"]
+        r = client.post("/approvals", json={"agent_id": agent_id, "action_type": "x"})
+        approval_id = r.json()["id"]
+        r = client.post(f"/approvals/{approval_id}/respond", json={"decision": "maybe"})
+        assert r.status_code == 422

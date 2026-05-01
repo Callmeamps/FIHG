@@ -175,6 +175,26 @@ class Message(Base):
     chatbook = relationship("Chatbook", back_populates="messages")
 
 
+class Approval(Base):
+    __tablename__ = "approvals"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    agent_id = Column(String(36), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    action_type = Column(String, nullable=False)
+    action_payload = Column(JSON, nullable=True)
+    risk = Column(Integer, nullable=False, default=1)       # 1-5
+    urgency = Column(Integer, nullable=False, default=1)  # 1-5
+    priority = Column(Integer, nullable=False, default=1)  # 1-5
+    status = Column(String, nullable=False, default="pending")  # pending, approved, denied
+    reason = Column(Text, nullable=True)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    responded_at = Column(DateTime, nullable=True)
+
+    agent = relationship("Agent")
+    project = relationship("Project")
+
+
 class Cell(Base):
     __tablename__ = "cells"
 

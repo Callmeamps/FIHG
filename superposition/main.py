@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select
 
 import superposition.models  # noqa: F401
-from superposition.models import Project, Task, Artifact, Agent, Process, Run, Lane, Chatbook, Message, Cell
+from superposition.models import Project, Task, Artifact, Agent, Process, Run, Lane, Chatbook, Message, Cell, Approval
 
 
 # --- Pydantic schemas -------------------------------------------------------
@@ -155,6 +155,28 @@ class UpdateProcess(BaseModel):
     pid: Optional[int] = None
     status: Optional[str] = None
     tty_info: Optional[dict] = None
+
+
+class CreateApproval(BaseModel):
+    agent_id: str
+    action_type: str
+    action_payload: Optional[dict] = None
+    risk: int = 1
+    urgency: int = 1
+    priority: int = 1
+    project_id: Optional[str] = None
+
+    @field_validator("risk", "urgency", "priority")
+    @classmethod
+    def score_range(cls, v: int) -> int:
+        if not 1 <= v <= 5:
+            raise ValueError("Score must be between 1 and 5")
+        return v
+
+
+class RespondApproval(BaseModel):
+    decision: str  # "approved" or "denied"
+    reason: Optional[str] = None
 
 
 class ExecuteCell(BaseModel):
@@ -870,6 +892,84 @@ async def delete_artifact(artifact_id: str, _auth: str = Depends(verify_api_key)
     await session.delete(artifact)
     await session.flush()
     return {"status": "deleted"}
+
+
+# --- Approvals -------------------------------------------------------------
+
+@app.get("/approvals")
+async def list_approvals(
+    status: Optional[str] = None,
+    agent_id: Optional[str] = None,
+    _auth: str = Depends(verify_api_key),
+    session: AsyncSession = Depends(get_session)
+):
+    stmt = select(Approval).order_by(Approval.created_at.desc())
+    if status:
+        stmt = stmt.where(Approval.status == status)
+    if agent_id:
+        stmt = stmt.where(Approval.agent_id == agent_id)
+    result = await session.execute(stmt)
+    return [{"id": a.id, "agent_id": a.agent_id, "action_type": a.action_type,
+             "risk": a.risk, "urgency": a.urgency, "priority": a.priority,
+             "status": a.status, "project_id": a.project_id,
+             "created_at": a.created_at.isoformat() if a.created_at else None,
+             "responded_at": a.responded_at.isoformat() if a.responded_at else None}
+            for a in result.scalars().all()]
+
+@app.post("/approvals")
+async def create_approval(body: CreateApproval, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    agent = await session.get(Agent, body.agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if body.project_id:
+        project = await session.get(Project, body.project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+    approval = Approval(
+        agent_id=body.agent_id,
+        action_type=body.action_type,
+        action_payload=body.action_payload,
+        risk=body.risk,
+        urgency=body.urgency,
+        priority=body.priority,
+        project_id=body.project_id,
+        status="pending",
+    )
+    session.add(approval)
+    await session.flush()
+    return {"id": approval.id, "agent_id": approval.agent_id, "action_type": approval.action_type,
+            "risk": approval.risk, "urgency": approval.urgency, "priority": approval.priority,
+            "status": approval.status, "project_id": approval.project_id,
+            "created_at": approval.created_at.isoformat() if approval.created_at else None}
+
+@app.get("/approvals/{approval_id}")
+async def get_approval(approval_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    approval = await session.get(Approval, approval_id)
+    if not approval:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    return {"id": approval.id, "agent_id": approval.agent_id, "action_type": approval.action_type,
+            "action_payload": approval.action_payload, "risk": approval.risk,
+            "urgency": approval.urgency, "priority": approval.priority,
+            "status": approval.status, "reason": approval.reason,
+            "project_id": approval.project_id,
+            "created_at": approval.created_at.isoformat() if approval.created_at else None,
+            "responded_at": approval.responded_at.isoformat() if approval.responded_at else None}
+
+@app.post("/approvals/{approval_id}/respond")
+async def respond_approval(approval_id: str, body: RespondApproval, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    approval = await session.get(Approval, approval_id)
+    if not approval:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    if approval.status != "pending":
+        raise HTTPException(status_code=409, detail=f"Approval already {approval.status}")
+    if body.decision not in ("approved", "denied"):
+        raise HTTPException(status_code=422, detail="decision must be 'approved' or 'denied'")
+    approval.status = body.decision
+    approval.reason = body.reason
+    approval.responded_at = datetime.now(UTC)
+    await session.flush()
+    return {"id": approval.id, "status": approval.status, "reason": approval.reason,
+            "responded_at": approval.responded_at.isoformat() if approval.responded_at else None}
 
 
 # --- Cell execution -------------------------------------------------------
