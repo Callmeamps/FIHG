@@ -415,6 +415,47 @@ async def update_task(task_id: str, body: UpdateTask, _auth: str = Depends(verif
     return {"id": task.id, "title": task.title, "status": task.status}
 
 
+# --- Task actions (pause/resume/cancel) --------------------------------------
+
+@app.post("/tasks/{task_id}/pause")
+async def pause_task(task_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    task = await session.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.status in ("done", "cancelled"):
+        raise HTTPException(status_code=409, detail=f"Cannot pause a {task.status} task")
+    task.status = "paused"
+    await session.flush()
+    await session.commit()
+    return {"id": task.id, "status": task.status}
+
+
+@app.post("/tasks/{task_id}/resume")
+async def resume_task(task_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    task = await session.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.status not in ("paused", "in_progress"):
+        raise HTTPException(status_code=409, detail=f"Cannot resume a {task.status} task")
+    task.status = "in_progress"
+    await session.flush()
+    await session.commit()
+    return {"id": task.id, "status": task.status}
+
+
+@app.post("/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    task = await session.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.status in ("done", "cancelled"):
+        raise HTTPException(status_code=409, detail=f"Cannot cancel a {task.status} task")
+    task.status = "cancelled"
+    await session.flush()
+    await session.commit()
+    return {"id": task.id, "status": task.status}
+
+
 # --- Chatbooks -------------------------------------------------------------
 
 @app.get("/chatbooks")

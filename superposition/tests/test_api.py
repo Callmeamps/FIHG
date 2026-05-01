@@ -899,3 +899,54 @@ def test_approval_invalid_decision():
         approval_id = r.json()["id"]
         r = client.post(f"/approvals/{approval_id}/respond", json={"decision": "maybe"})
         assert r.status_code == 422
+
+
+def test_task_pause_resume_cancel():
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Task Actions"})
+        pid = r.json()["id"]
+        r = client.post("/tasks", json={"project_id": pid, "title": "Test Task"})
+        task_id = r.json()["id"]
+        assert r.json()["status"] in ("todo", "Todo")
+
+        # Pause
+        r = client.post(f"/tasks/{task_id}/pause")
+        assert r.status_code == 200, f"pause failed: {r.status_code} {r.json()}"
+        assert r.json()["status"] == "paused"
+
+        # Resume: paused → in_progress
+        r = client.post(f"/tasks/{task_id}/resume")
+        assert r.status_code == 200, f"resume failed: {r.status_code} {r.json()}"
+        assert r.json()["status"] == "in_progress"
+
+        # Cancel directly from in_progress (cancel works from any non-done state)
+        r = client.post(f"/tasks/{task_id}/cancel")
+        assert r.status_code == 200, f"cancel failed: {r.status_code} {r.json()}"
+        assert r.json()["status"] == "cancelled"
+
+        # Cannot pause a cancelled task
+        r = client.post(f"/tasks/{task_id}/pause")
+        assert r.status_code == 409
+        assert "Cannot pause" in r.json()["detail"]
+
+        # Cannot cancel an already cancelled task
+        r = client.post(f"/tasks/{task_id}/cancel")
+        assert r.status_code == 409
+
+
+def test_task_actions_on_done_task():
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "P"})
+        pid = r.json()["id"]
+        r = client.post("/tasks", json={"project_id": pid, "title": "Done Task"})
+        task_id = r.json()["id"]
+        r = client.put(f"/tasks/{task_id}", json={"status": "done"})
+        assert r.json()["status"] == "done"
+
+        # Cannot pause/cancel a done task
+        r = client.post(f"/tasks/{task_id}/pause")
+        assert r.status_code == 409
+        r = client.post(f"/tasks/{task_id}/cancel")
+        assert r.status_code == 409
+        r = client.post(f"/tasks/{task_id}/resume")
+        assert r.status_code == 409
