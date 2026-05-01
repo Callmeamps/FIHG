@@ -1,0 +1,61 @@
+[gd_scene load_steps=2 format=3 uid="uid://d3x7p9n6k2f1q"]
+
+[ext_resource type="Script" path="res://scenes/chatbook.gd" id="1_chatbook"]
+
+[node name="Chatbook" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_chatbook")
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 0.0
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 56.0
+grow_horizontal = 2
+text = "Chatbook"
+theme_override_font_sizes/font_size = 24
+
+[node name="MessageList" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 0.85
+offset_left = 16.0
+offset_top = 64.0
+offset_right = -16.0
+offset_bottom = -64.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="InputRow" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -64.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Input" type="LineEdit" parent="InputRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Type a message..."
+
+[node name="SendBtn" type="Button" parent="InputRow"]
+layout_mode = 2
+text = "Send"
