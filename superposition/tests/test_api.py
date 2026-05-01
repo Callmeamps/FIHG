@@ -369,3 +369,30 @@ def test_task_put():
         assert r.status_code == 200
         assert r.json()["title"] == "Renamed"
         assert r.json()["status"] == "done"
+
+
+def test_artifact_source_ref_invalid():
+    """source_ref without cell:/message: prefix is rejected by Pydantic validation."""
+    with TestClient(app) as client:
+        p = client.post("/projects", json={"title": "Ref Test"}).json()
+        r = client.post("/artifacts", json={
+            "project_id": p["id"],
+            "kind": "text",
+            "title": "Bad ref",
+            "source_ref": "not-a-prefix-123",
+        })
+        assert r.status_code == 422, r.text
+
+
+def test_artifact_source_ref_valid():
+    """source_ref with cell:/message: prefix is accepted."""
+    with TestClient(app) as client:
+        p = client.post("/projects", json={"title": "Ref Test 2"}).json()
+        r = client.post("/artifacts", json={
+            "project_id": p["id"],
+            "kind": "text",
+            "title": "Good ref",
+            "source_ref": f"cell:{p['id']}",
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["source_ref"] == f"cell:{p['id']}"

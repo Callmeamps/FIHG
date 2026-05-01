@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, UTC
 from sqlalchemy import (
-    Column, String, Text, Integer, DateTime, JSON, ForeignKey
+    Column, String, Text, Integer, DateTime, JSON, ForeignKey, CheckConstraint
 )
 from sqlalchemy.orm import relationship
 
@@ -70,6 +70,13 @@ class Artifact(Base):
 
     project = relationship("Project", back_populates="artifacts")
     task = relationship("Task", back_populates="artifacts")
+
+    __table_args__ = (
+        CheckConstraint(
+            "source_ref IS NULL OR source_ref LIKE 'cell:%' OR source_ref LIKE 'message:%'",
+            name="artifact_source_ref_prefix",
+        ),
+    )
 
 
 class Agent(Base):

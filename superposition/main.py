@@ -5,7 +5,7 @@ from datetime import datetime, UTC
 from typing import Optional
 
 from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from superposition.db import engine, Base, get_session
 from superposition.terminal import TerminalRuntime
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,6 +71,15 @@ class CreateArtifact(BaseModel):
     content_text: Optional[str] = None
     source_ref: Optional[str] = None
     tags: Optional[list[str]] = None
+
+    @field_validator("source_ref")
+    @classmethod
+    def source_ref_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if not (v.startswith("cell:") or v.startswith("message:")):
+            raise ValueError('source_ref must start with "cell:" or "message:"')
+        return v
 
 class UpdateArtifact(BaseModel):
     title: Optional[str] = None

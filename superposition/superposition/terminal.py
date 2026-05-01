@@ -41,7 +41,6 @@ class TerminalRuntime:
     def __init__(self):
         self._sessions: dict[str, TermSession] = {}
         self._readers: dict[str, asyncio.Task] = {}
-        self._loop = asyncio.get_event_loop()
 
     async def spawn(self, command: str = "/bin/bash", cols: int = 80, rows: int = 24) -> TermSession:
         """Spawn a new PTY session.
