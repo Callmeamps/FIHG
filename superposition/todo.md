@@ -59,22 +59,22 @@
 
 ## Remaining (see bd issues)
 ### P1
-- [ ] Add auth tokens + CORS (Projects-grp)
+- [x] Add auth tokens + CORS (Projects-grp)
 ### P2 Backend
-- [ ] GET /dashboard (Projects-a3h)
-- [ ] Agent CRUD (Projects-cvo)
-- [ ] Process CRUD (Projects-6bl)
-- [ ] Run CRUD (Projects-6m1)
-- [ ] Approval system (Projects-rel)
-- [ ] Lane endpoints (Projects-tm7)
+- [x] GET /dashboard (Projects-a3h)
+- [x] Agent CRUD (Projects-cvo)
+- [x] Process CRUD (Projects-6bl)
+- [x] Run CRUD (Projects-6m1)
+- [x] Approval system (Projects-rel)
+- [x] Lane endpoints (Projects-tm7)
 - [ ] No CI (Projects-vp1)
 ### P3 Backend
 - [ ] get_session fragile commit pattern (Projects-8w6)
 - [ ] test_models uses AsyncSessionLocal directly (Projects-ilq)
-- [ ] No Makefile shortcuts (Projects-1vq)
-- [ ] GET /chatbooks/{id}/messages (Projects-qtp)
-- [ ] Cell-to-task conversion (Projects-6tm)
-- [ ] Task pause/resume/cancel (Projects-wnm)
+- [x] No Makefile shortcuts (Projects-1vq)
+- [x] GET /chatbooks/{id}/messages (Projects-qtp)
+- [x] Cell-to-task conversion (Projects-6tm)
+- [x] Task pause/resume/cancel (Projects-wnm)
 ### P3 Frontend
 - [ ] Inspector.tscn + Activity.tscn (Projects-arq)
 
