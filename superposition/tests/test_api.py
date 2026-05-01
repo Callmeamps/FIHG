@@ -159,3 +159,213 @@ def test_create_task_from_message():
         assert json["status"] == "todo"
         assert json["project_id"] == pid
         assert json["created_from_ref"] == f"chatbook:{cid}/message:{mid}"
+
+
+def test_create_task_from_missing_message():
+    """create-task with non-existent message returns 404."""
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "P"})
+        pid = r.json()["id"]
+        r = client.post("/chatbooks", json={"project_id": pid})
+        cid = r.json()["id"]
+
+        r = client.post(f"/chatbooks/{cid}/messages/doesnotexist/create-task")
+        assert r.status_code == 404
+
+
+def test_get_tasks():
+    """GET /tasks lists all tasks; filterable by project_id and status."""
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Tasks Test"})
+        pid = r.json()["id"]
+
+        r = client.post("/tasks", json={"project_id": pid, "title": "Task A", "status": "todo"})
+        tid_a = r.json()["id"]
+        r = client.post("/tasks", json={"project_id": pid, "title": "Task B", "status": "done"})
+        tid_b = r.json()["id"]
+
+        r = client.get("/tasks")
+        assert r.status_code == 200
+        ids = [t["id"] for t in r.json()]
+        assert tid_a in ids and tid_b in ids
+
+        r = client.get(f"/tasks?project_id={pid}")
+        assert all(t["project_id"] == pid for t in r.json())
+
+        r = client.get("/tasks?status=done")
+        assert all(t["status"] == "done" for t in r.json())
+
+
+def test_get_chatbook():
+    """GET /chatbooks/{id} returns a single chatbook."""
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Single CB Test"})
+        pid = r.json()["id"]
+        r = client.post("/chatbooks", json={"project_id": pid, "title": "My Chat"})
+        cid = r.json()["id"]
+
+        r = client.get(f"/chatbooks/{cid}")
+        assert r.status_code == 200
+        assert r.json()["title"] == "My Chat"
+        assert r.json()["id"] == cid
+
+
+def test_get_chatbook_not_found():
+    with TestClient(app) as client:
+        r = client.get("/chatbooks/doesnotexist")
+        assert r.status_code == 404
+
+
+def test_chatbook_put_delete():
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "CB Update Test"})
+        pid = r.json()["id"]
+        r = client.post("/chatbooks", json={"project_id": pid, "title": "Old Title"})
+        cid = r.json()["id"]
+
+        r = client.put(f"/chatbooks/{cid}", json={"title": "New Title"})
+        assert r.status_code == 200
+        assert r.json()["title"] == "New Title"
+
+        r = client.get(f"/chatbooks/{cid}")
+        assert r.json()["title"] == "New Title"
+
+        r = client.delete(f"/chatbooks/{cid}")
+        assert r.json()["status"] == "deleted"
+
+        r = client.get(f"/chatbooks/{cid}")
+        assert r.status_code == 404
+
+
+def test_cell_execution_unknown_language():
+    """Unknown language returns error output, not a crash."""
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Unknown Lang"})
+        pid = r.json()["id"]
+        r = client.post("/chatbooks", json={"project_id": pid})
+        cid = r.json()["id"]
+
+        r = client.post(f"/chatbooks/{cid}/cells", json={"language": "cobol", "source": "DISPLAY 'HELLO'."})
+        assert r.status_code == 200
+        json = r.json()
+        assert json["status"] == "error"
+        assert "Unsupported language" in json["output"]
+
+
+def test_cell_execution_unknown_language_still_creates_run():
+    """Even failed cell execution creates a Run record."""
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Run Provenance"})
+        pid = r.json()["id"]
+        r = client.post("/chatbooks", json={"project_id": pid})
+        cid = r.json()["id"]
+
+        r = client.post(f"/chatbooks/{cid}/cells", json={"language": "unsupported", "source": "boom"})
+        assert r.status_code == 200
+        assert "run_id" in r.json()
+        assert r.json()["run_id"] is not None
+
+
+def test_cell_put_delete():
+    """PUT /cells/{id} and DELETE /cells/{id} work correctly."""
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Cell CRUD"})
+        pid = r.json()["id"]
+        r = client.post("/chatbooks", json={"project_id": pid})
+        cid = r.json()["id"]
+
+        r = client.post(f"/chatbooks/{cid}/cells", json={"language": "shell", "source": "echo hi"})
+        cell_id = r.json()["id"]
+
+        r = client.put(f"/chatbooks/{cid}/cells/{cell_id}", json={"source": "echo updated"})
+        assert r.status_code == 200
+        assert r.json()["source"] == "echo updated"
+
+        r = client.delete(f"/chatbooks/{cid}/cells/{cell_id}")
+        assert r.json()["status"] == "deleted"
+
+        r = client.get(f"/chatbooks/{cid}/cells")
+        assert all(c["id"] != cell_id for c in r.json())
+
+
+def test_artifact_task_filter():
+    """GET /artifacts?task_id= filters correctly."""
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Artifact Task Filter"})
+        pid = r.json()["id"]
+        r = client.post("/tasks", json={"project_id": pid, "title": "A Task"})
+        tid = r.json()["id"]
+
+        r = client.post("/artifacts", json={"project_id": pid, "task_id": tid, "kind": "text", "title": "Linked"})
+        assert r.json()["task_id"] == tid
+        aid = r.json()["id"]
+
+        r = client.post("/artifacts", json={"project_id": pid, "kind": "text", "title": "Unlinked"})
+        unlinked_aid = r.json()["id"]
+
+        r = client.get(f"/artifacts?task_id={tid}")
+        assert len(r.json()) == 1
+        assert r.json()[0]["id"] == aid
+
+
+def test_artifact_put_delete():
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Artifact CRUD"})
+        pid = r.json()["id"]
+        r = client.post("/artifacts", json={"project_id": pid, "kind": "text", "title": "Old"})
+        aid = r.json()["id"]
+
+        r = client.put(f"/artifacts/{aid}", json={"title": "New Title", "tags": ["updated"]})
+        assert r.status_code == 200
+        assert r.json()["title"] == "New Title"
+        assert r.json()["tags"] == ["updated"]
+
+        r = client.delete(f"/artifacts/{aid}")
+        assert r.json()["status"] == "deleted"
+
+        r = client.get(f"/artifacts/{aid}")
+        assert r.status_code == 404
+
+
+def test_artifact_delete_not_found():
+    with TestClient(app) as client:
+        r = client.delete("/artifacts/doesnotexist")
+        assert r.status_code == 404
+
+
+def test_terminal_write_missing_session():
+    """Write to non-existent session returns 404."""
+    with TestClient(app) as client:
+        r = client.post("/terminal/doesnotexist/write", json={"data": "echo hi"})
+        assert r.status_code == 404
+
+
+def test_artifact_missing_project():
+    """Create artifact with non-existent project returns 404."""
+    with TestClient(app) as client:
+        r = client.post("/artifacts", json={"project_id": "doesnotexist", "kind": "text", "title": "Bad"})
+        assert r.status_code == 404
+
+
+def test_project_put():
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "To Update"})
+        pid = r.json()["id"]
+
+        r = client.put(f"/projects/{pid}", json={"title": "Updated", "status": "archived"})
+        assert r.status_code == 200
+        assert r.json()["title"] == "Updated"
+        assert r.json()["status"] == "archived"
+
+
+def test_task_put():
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Task Update"})
+        pid = r.json()["id"]
+        r = client.post("/tasks", json={"project_id": pid, "title": "Original", "status": "todo"})
+        tid = r.json()["id"]
+
+        r = client.put(f"/tasks/{tid}", json={"title": "Renamed", "status": "done"})
+        assert r.status_code == 200
+        assert r.json()["title"] == "Renamed"
+        assert r.json()["status"] == "done"

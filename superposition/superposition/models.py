@@ -1,11 +1,14 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy import (
     Column, String, Text, Integer, DateTime, JSON, ForeignKey
 )
 from sqlalchemy.orm import relationship
 
 from .db import Base
+
+def _utcnow():
+    return datetime.now(UTC)
 
 def generate_uuid():
     return str(uuid.uuid4())
@@ -20,8 +23,8 @@ class Project(Base):
     priority = Column(Integer, nullable=False, default=2)
     urgency = Column(Integer, nullable=False, default=2)
     risk = Column(Integer, nullable=False, default=2)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
     artifacts = relationship("Artifact", back_populates="project", cascade="all, delete-orphan")
@@ -43,7 +46,7 @@ class Task(Base):
     assigned_agent_id = Column(String(36), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     approval_state = Column(String, nullable=True)
     created_from_ref = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
 
     project = relationship("Project", back_populates="tasks")
     artifacts = relationship("Artifact", back_populates="task", cascade="all, delete-orphan")
@@ -63,7 +66,7 @@ class Artifact(Base):
     hash = Column(String, nullable=True)
     source_ref = Column(String, nullable=True)
     tags = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
 
     project = relationship("Project", back_populates="artifacts")
     task = relationship("Task", back_populates="artifacts")
@@ -112,7 +115,7 @@ class Run(Base):
     input = Column(JSON, nullable=True)
     output = Column(Text, nullable=True)
     status = Column(String, nullable=False)
-    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, default=_utcnow, nullable=False)
     finished_at = Column(DateTime, nullable=True)
 
     process = relationship("Process", back_populates="runs")
@@ -130,8 +133,8 @@ class Lane(Base):
     layout_state = Column(JSON, nullable=True)
     pinned_panels = Column(JSON, nullable=True)
     recent_items = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     project = relationship("Project", back_populates="lanes")
 
@@ -143,8 +146,8 @@ class Chatbook(Base):
     project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     lane_id = Column(String(36), nullable=True)
     title = Column(String, nullable=False, default="New Chat")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     project = relationship("Project", backref="chatbooks")
     messages = relationship("Message", back_populates="chatbook", cascade="all, delete-orphan", order_by="Message.created_at")
@@ -160,7 +163,7 @@ class Message(Base):
     content = Column(Text, nullable=False)
     parent_id = Column(String(36), nullable=True)  # thread nesting
     metadata_ = Column("metadata", JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
 
     chatbook = relationship("Chatbook", back_populates="messages")
 
@@ -177,7 +180,7 @@ class Cell(Base):
     status = Column(String, nullable=False, default="pending")  # pending, running, success, error
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
 
     chatbook = relationship("Chatbook", back_populates="cells")
     run = relationship("Run", uselist=False, back_populates="cell", cascade="all, delete-orphan")

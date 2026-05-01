@@ -31,6 +31,15 @@
 - [ ] Layout persistence for lanes
 - [ ] Basic performance testing and optimization
 
+## Phase 2: Backend Cleanup
+- [x] _run_cell(): async subprocess (asyncio.create_subprocess_exec) + dispatch dict
+- [x] datetime.utcnow() deprecation → datetime.now(UTC) in models.py + main.py
+- [x] Missing endpoints: GET /tasks, GET /chatbooks/{id}, DELETE/PUT chatbooks, DELETE/PUT artifacts, DELETE/PUT cells
+- [x] Cell execution creates Run record (provenance model)
+- [x] terminal_runtime from app.state not module-level global
+- [x] Add artifact validation (project check on create)
+- [x] All 33 tests pass (15 new tests added)
+
 ## Frontend Cleanup (Phase 3)
 - [ ] project.godot: Remove [dotnet] section + Jolt Physics (no .NET, no 3D)
 - [ ] main.gd: Instantiate TerminalPanel as child of TerminalDock
