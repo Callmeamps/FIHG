@@ -115,3 +115,47 @@ def test_cell_execution_python():
         json = r.json()
         assert json["status"] == "success"
         assert "py_cell_ok" in json.get("output", "")
+
+
+def test_artifact_create_and_list():
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Artifact Test"})
+        pid = r.json()["id"]
+
+        r = client.post("/artifacts", json={
+            "project_id": pid,
+            "kind": "code",
+            "title": "Cell output capture",
+            "content_text": "some captured output",
+            "source_ref": "cell:abc123",
+            "tags": ["shell", "capture"],
+        })
+        assert r.status_code == 200
+        aid = r.json()["id"]
+        assert r.json()["kind"] == "code"
+        assert r.json()["source_ref"] == "cell:abc123"
+
+        r = client.get(f"/artifacts?project_id={pid}")
+        assert r.status_code == 200
+        assert len(r.json()) == 1
+        assert r.json()[0]["id"] == aid
+
+
+def test_create_task_from_message():
+    with TestClient(app) as client:
+        r = client.post("/projects", json={"title": "Msg Task"})
+        pid = r.json()["id"]
+
+        r = client.post("/chatbooks", json={"project_id": pid, "title": "Chat"})
+        cid = r.json()["id"]
+
+        r = client.post(f"/chatbooks/{cid}/messages", json={"role": "user", "content": "Write a parser for CSV files"})
+        mid = r.json()["id"]
+
+        r = client.post(f"/chatbooks/{cid}/messages/{mid}/create-task")
+        assert r.status_code == 200
+        json = r.json()
+        assert json["title"] == "Write a parser for CSV files"
+        assert json["status"] == "todo"
+        assert json["project_id"] == pid
+        assert json["created_from_ref"] == f"chatbook:{cid}/message:{mid}"

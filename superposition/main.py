@@ -47,6 +47,16 @@ class CreateCell(BaseModel):
     language: str = "shell"
     source: str
 
+class CreateArtifact(BaseModel):
+    project_id: str
+    task_id: Optional[str] = None
+    kind: str = "text"
+    title: str
+    content_text: Optional[str] = None
+    source_ref: Optional[str] = None
+    tags: Optional[list[str]] = None
+
+
 class ExecuteCell(BaseModel):
     language: str = "shell"
     source: str
@@ -200,6 +210,43 @@ async def list_terminal_sessions():
                          for s in terminal_runtime.sessions.values()]}
 
 
+# --- Artifacts --------------------------------------------------------------
+
+@app.post("/artifacts")
+async def create_artifact(body: CreateArtifact, session: AsyncSession = Depends(get_session)):
+    artifact = Artifact(
+        project_id=body.project_id,
+        task_id=body.task_id,
+        kind=body.kind,
+        title=body.title,
+        content_text=body.content_text,
+        source_ref=body.source_ref,
+        tags=body.tags,
+    )
+    session.add(artifact)
+    await session.flush()
+    return {"id": artifact.id, "title": artifact.title, "kind": artifact.kind,
+            "source_ref": artifact.source_ref, "tags": artifact.tags}
+
+
+@app.get("/artifacts")
+async def list_artifacts(
+    project_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+    session: AsyncSession = Depends(get_session)
+):
+    stmt = select(Artifact).order_by(Artifact.created_at.desc())
+    if project_id:
+        stmt = stmt.where(Artifact.project_id == project_id)
+    if task_id:
+        stmt = stmt.where(Artifact.task_id == task_id)
+    result = await session.execute(stmt)
+    return [{"id": a.id, "title": a.title, "kind": a.kind,
+             "content_text": a.content_text, "source_ref": a.source_ref,
+             "tags": a.tags, "project_id": a.project_id, "task_id": a.task_id}
+            for a in result.scalars().all()]
+
+
 # --- Cell execution -------------------------------------------------------
 
 async def _run_cell(source: str, language: str = "shell") -> tuple[str, str, str]:
@@ -295,6 +342,41 @@ async def list_cells(chatbook_id: str, session: AsyncSession = Depends(get_sessi
         "started_at": c.started_at.isoformat() if c.started_at else None,
         "finished_at": c.finished_at.isoformat() if c.finished_at else None,
     } for c in result.scalars().all()]
+
+
+# --- Tasks (advanced) ----------------------------------------------------
+
+@app.post("/chatbooks/{chatbook_id}/messages/{message_id}/create-task")
+async def create_task_from_message(
+    chatbook_id: str,
+    message_id: str,
+    session: AsyncSession = Depends(get_session)
+):
+    msg = await session.get(Message, message_id)
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if msg.chatbook_id != chatbook_id:
+        raise HTTPException(status_code=400, detail="Message does not belong to this chatbook")
+
+    chatbook = await session.get(Chatbook, chatbook_id)
+    if not chatbook:
+        raise HTTPException(status_code=404, detail="Chatbook not found")
+
+    # Generate title from first line of message
+    title = msg.content.strip().split("\n")[0][:80]
+    if not title:
+        title = f"Task from message {message_id[:8]}"
+
+    task = Task(
+        project_id=chatbook.project_id,
+        title=title,
+        created_from_ref=f"chatbook:{chatbook_id}/message:{message_id}",
+    )
+    session.add(task)
+    await session.flush()
+
+    return {"id": task.id, "title": task.title, "status": task.status,
+            "project_id": task.project_id, "created_from_ref": task.created_from_ref}
 
 
 # --- WebSocket (events + terminal output streaming) -----------------------
