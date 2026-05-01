@@ -31,24 +31,33 @@
 - [ ] Layout persistence for lanes
 - [ ] Basic performance testing and optimization
 
-## Phase 2: Backend Cleanup
-- [x] _run_cell(): async subprocess (asyncio.create_subprocess_exec) + dispatch dict
-- [x] datetime.utcnow() deprecation → datetime.now(UTC) in models.py + main.py
-- [x] Missing endpoints: GET /tasks, GET /chatbooks/{id}, DELETE/PUT chatbooks, DELETE/PUT artifacts, DELETE/PUT cells
-- [x] Cell execution creates Run record (provenance model)
-- [x] terminal_runtime from app.state not module-level global
-- [x] Add artifact validation (project check on create)
-- [x] All 33 tests pass (15 new tests added)
+## Cleanup Complete (2026-05-01)
+### Frontend — completed
+- [x] project.godot: Remove [dotnet] section + Jolt Physics
+- [x] main.gd: TerminalPanel as child of TerminalDock, WS reconnect, Projects button wired
+- [x] All scripts: Use API_BASE constant, error handling on all HTTP/JSON calls
+- [x] terminal_panel.gd: Remove polling after write, rely on WS
+- [x] dashboard.gd: Minimal health check display
+- [x] projects_view: New scene for Projects nav button
 
-## Frontend Cleanup (Phase 3)
-- [ ] project.godot: Remove [dotnet] section + Jolt Physics (no .NET, no 3D)
-- [ ] main.gd: Instantiate TerminalPanel as child of TerminalDock
-- [ ] main.gd: Add WS reconnect logic
-- [ ] main.gd: Wire up Projects/Agents buttons (placeholder or disable)
-- [ ] All scripts: Use API_BASE constant instead of hardcoded URL
-- [ ] chatbook.gd: Reuse HTTPRequest, add error handling
-- [ ] terminal_panel.gd: Reuse HTTPRequest, remove polling, rely on WS
-- [ ] dashboard.gd: Add minimal project/task summary or reduce to stub
+### Backend — completed
+- [x] _run_cell(): async subprocess (asyncio.create_subprocess_exec) + dispatch dict
+- [x] datetime.utcnow() → datetime.now(UTC) everywhere
+- [x] terminal_runtime from app.state (test isolation)
+- [x] Cell execution creates Run record (provenance model)
+- [x] Missing endpoints: GET /tasks, GET /chatbooks/{id}, DELETE/PUT chatbooks/artifacts/cells
+- [x] Artifact create validates project exists
+- [x] All 33 tests pass (18 original + 15 new)
+
+### Remaining (see bd issues)
+- [ ] Add auth and rate limiting (bd: Projects-grp, P1)
+- [ ] source_ref in Artifact unvalidated (bd: Projects-iam, P2)
+- [ ] TerminalRuntime uses asyncio.get_event_loop() in __init__ (bd: Projects-riq, P2)
+- [ ] No CI (bd: Projects-vp1, P2)
+- [ ] No seed script/fixtures (bd: Projects-5ik, P2)
+- [ ] get_session fragile commit pattern (bd: Projects-8w6, P3)
+- [ ] test_models.py uses AsyncSessionLocal directly (bd: Projects-ilq, P3)
+- [ ] No Makefile shortcuts (bd: Projects-1vq, P3)
 
 ## Infrastructure
 - [x] Set up Godot project structure (scenes, UI components)
