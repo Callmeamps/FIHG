@@ -1,0 +1,61 @@
+[gd_scene load_steps=2 format=3 uid="uid://bxk9q2r7m1f3v"]
+
+[ext_resource type="Script" path="res://scenes/projects_view.gd" id="1_projects_view"]
+
+[node name="ProjectsView" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_projects_view")
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 0.0
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 56.0
+grow_horizontal = 2
+text = "Projects"
+theme_override_font_sizes/font_size = 24
+
+[node name="ProjectList" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 0.7
+offset_left = 16.0
+offset_top = 64.0
+offset_right = -16.0
+offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CreateRow" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -72.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="CreateInput" type="LineEdit" parent="CreateRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "New project name..."
+
+[node name="CreateBtn" type="Button" parent="CreateRow"]
+layout_mode = 2
+text = "Create"

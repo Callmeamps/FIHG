@@ -31,6 +31,16 @@
 - [ ] Layout persistence for lanes
 - [ ] Basic performance testing and optimization
 
+## Frontend Cleanup (Phase 3)
+- [ ] project.godot: Remove [dotnet] section + Jolt Physics (no .NET, no 3D)
+- [ ] main.gd: Instantiate TerminalPanel as child of TerminalDock
+- [ ] main.gd: Add WS reconnect logic
+- [ ] main.gd: Wire up Projects/Agents buttons (placeholder or disable)
+- [ ] All scripts: Use API_BASE constant instead of hardcoded URL
+- [ ] chatbook.gd: Reuse HTTPRequest, add error handling
+- [ ] terminal_panel.gd: Reuse HTTPRequest, remove polling, rely on WS
+- [ ] dashboard.gd: Add minimal project/task summary or reduce to stub
+
 ## Infrastructure
 - [x] Set up Godot project structure (scenes, UI components)
 - [x] Establish Godot ↔ Python API contract (HTTP/WebSocket)

@@ -1,5 +1,7 @@
 [gd_scene load_steps=2 format=3 uid="uid://c8hqp3e6m7d5x"]
 
+[ext_resource type="PackedScene" uid="uid://c1f5q7p3n8k2x" path="res://scenes/terminal_panel.tscn" id="1_terminal_panel"]
+
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 
 [node name="Main" type="Control"]
@@ -58,9 +60,13 @@ anchor_left = 0.15
 anchor_right = 1.0
 anchor_top = 0.7
 anchor_bottom = 1.0
-offset_left = 0.0
-offset_top = 0.0
-offset_right = 0.0
-offset_bottom = 0.0
 grow_horizontal = 2
 grow_vertical = 0
+
+[node name="TerminalPanel" parent="TerminalDock" instance=ExtResource("1_terminal_panel")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
