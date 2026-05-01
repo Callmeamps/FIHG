@@ -132,3 +132,31 @@ class Lane(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     project = relationship("Project", back_populates="lanes")
+
+
+class Chatbook(Base):
+    __tablename__ = "chatbooks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    lane_id = Column(String(36), nullable=True)
+    title = Column(String, nullable=False, default="New Chat")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    project = relationship("Project", backref="chatbooks")
+    messages = relationship("Message", back_populates="chatbook", cascade="all, delete-orphan", order_by="Message.created_at")
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    chatbook_id = Column(String(36), ForeignKey("chatbooks.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String, nullable=False)  # user, agent, system
+    content = Column(Text, nullable=False)
+    parent_id = Column(String(36), nullable=True)  # thread nesting
+    metadata_ = Column("metadata", JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    chatbook = relationship("Chatbook", back_populates="messages")
