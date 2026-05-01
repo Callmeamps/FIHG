@@ -620,3 +620,138 @@ def test_agent_not_found():
         assert r.status_code == 404
         r = client.delete("/agents/fake-id")
         assert r.status_code == 404
+
+
+def test_process_crud():
+    with TestClient(app) as client:
+        # Create project (for process association)
+        r = client.post("/projects", json={"title": "Process Test"})
+        pid = r.json()["id"]
+
+        # Create process
+        r = client.post("/processes", json={
+            "type": "shell", "command": "ls -la",
+            "project_id": pid, "status": "starting"
+        })
+        assert r.status_code == 200
+        proc_id = r.json()["id"]
+        assert r.json()["type"] == "shell"
+        assert r.json()["status"] == "starting"
+
+        # List processes
+        r = client.get("/processes")
+        assert r.status_code == 200
+        assert any(p["id"] == proc_id for p in r.json())
+
+        # Filter by project
+        r = client.get(f"/processes?project_id={pid}")
+        assert r.status_code == 200
+        assert any(p["id"] == proc_id for p in r.json())
+
+        # Get process
+        r = client.get(f"/processes/{proc_id}")
+        assert r.status_code == 200
+        assert r.json()["command"] == "ls -la"
+
+        # Update process (e.g., set pid and status)
+        r = client.put(f"/processes/{proc_id}", json={"status": "running", "pid": 12345})
+        assert r.status_code == 200
+        assert r.json()["status"] == "running"
+
+        # Delete process
+        r = client.delete(f"/processes/{proc_id}")
+        assert r.status_code == 200
+        r = client.get(f"/processes/{proc_id}")
+        assert r.status_code == 404
+
+
+def test_run_crud():
+    with TestClient(app) as client:
+        # Setup: project + process + (optionally) agent
+        r = client.post("/projects", json={"title": "Run Test"})
+        pid = r.json()["id"]
+        r = client.post("/processes", json={"type": "shell", "command": "echo hi", "project_id": pid})
+        proc_id = r.json()["id"]
+        r = client.post("/agents", json={"name": "Test Agent", "mode": "auto"})
+        agent_id = r.json()["id"]
+
+        # Create run
+        r = client.post("/runs", json={
+            "project_id": pid,
+            "process_id": proc_id,
+            "actor_id": agent_id,
+            "status": "running",
+            "input": {"language": "shell"},
+        })
+        assert r.status_code == 200
+        run_id = r.json()["id"]
+        assert r.json()["status"] == "running"
+
+        # List runs
+        r = client.get("/runs")
+        assert r.status_code == 200
+        assert any(run["id"] == run_id for run in r.json())
+
+        # Filter by actor
+        r = client.get(f"/runs?actor_id={agent_id}")
+        assert r.status_code == 200
+        assert any(run["id"] == run_id for run in r.json())
+
+        # Get run
+        r = client.get(f"/runs/{run_id}")
+        assert r.status_code == 200
+        assert r.json()["input"]["language"] == "shell"
+        assert r.json()["actor_id"] == agent_id
+
+        # Complete run
+        r = client.put(f"/runs/{run_id}", json={
+            "status": "success",
+            "output": "hello world",
+            "finished_at": "2026-05-01T12:00:00Z"
+        })
+        assert r.status_code == 200
+        assert r.json()["status"] == "success"
+        assert r.json()["finished_at"] is not None
+
+        # Delete run
+        r = client.delete(f"/runs/{run_id}")
+        assert r.status_code == 200
+        r = client.get(f"/runs/{run_id}")
+        assert r.status_code == 404
+
+
+def test_run_invalid_project_or_process():
+    with TestClient(app) as client:
+        r = client.post("/processes", json={"type": "shell", "command": "echo"})
+        proc_id = r.json()["id"]
+
+        # Invalid project
+        r = client.post("/runs", json={"project_id": "bad", "process_id": proc_id})
+        assert r.status_code == 404
+        assert "Project not found" in r.json()["detail"]
+
+        # Invalid process
+        r = client.post("/projects", json={"title": "P"})
+        pid = r.json()["id"]
+        r = client.post("/runs", json={"project_id": pid, "process_id": "bad"})
+        assert r.status_code == 404
+        assert "Process not found" in r.json()["detail"]
+
+        # Invalid agent
+        r = client.post("/runs", json={"project_id": pid, "process_id": proc_id, "actor_id": "bad"})
+        assert r.status_code == 404
+        assert "Agent not found" in r.json()["detail"]
+
+
+def test_run_not_found():
+    with TestClient(app) as client:
+        for method, url, body in [
+            (client.get, "/runs/fake", None),
+            (client.put, "/runs/fake", {"status": "done"}),
+            (client.delete, "/runs/fake", None),
+        ]:
+            if body:
+                r = method(url, json=body)
+            else:
+                r = method(url)
+            assert r.status_code == 404

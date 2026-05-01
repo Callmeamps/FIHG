@@ -123,6 +123,40 @@ class UpdateAgent(BaseModel):
     status: Optional[str] = None
 
 
+class CreateRun(BaseModel):
+    project_id: str
+    process_id: str
+    actor_id: Optional[str] = None
+    cell_id: Optional[str] = None
+    status: str = "running"
+    input: Optional[dict] = None
+    output: Optional[str] = None
+    started_at: Optional[str] = None  # ISO8601 string
+
+
+class UpdateRun(BaseModel):
+    status: Optional[str] = None
+    output: Optional[str] = None
+    finished_at: Optional[str] = None  # ISO8601 string
+
+
+class CreateProcess(BaseModel):
+    type: str
+    command: str
+    project_id: Optional[str] = None
+    task_id: Optional[str] = None
+    lane_id: Optional[str] = None
+    status: str = "starting"
+
+
+class UpdateProcess(BaseModel):
+    type: Optional[str] = None
+    command: Optional[str] = None
+    pid: Optional[int] = None
+    status: Optional[str] = None
+    tty_info: Optional[dict] = None
+
+
 class ExecuteCell(BaseModel):
     language: str = "shell"
     source: str
@@ -506,6 +540,175 @@ async def delete_agent(agent_id: str, _auth: str = Depends(verify_api_key), sess
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     await session.delete(agent)
+    await session.flush()
+    return {"status": "deleted"}
+
+
+# --- Processes ------------------------------------------------------------
+
+@app.get("/processes")
+async def list_processes(
+    project_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+    status: Optional[str] = None,
+    _auth: str = Depends(verify_api_key),
+    session: AsyncSession = Depends(get_session)
+):
+    stmt = select(Process)
+    if project_id:
+        stmt = stmt.where(Process.project_id == project_id)
+    if task_id:
+        stmt = stmt.where(Process.task_id == task_id)
+    if status:
+        stmt = stmt.where(Process.status == status)
+    result = await session.execute(stmt)
+    return [{"id": p.id, "type": p.type, "command": p.command, "pid": p.pid,
+             "status": p.status, "project_id": p.project_id, "task_id": p.task_id}
+            for p in result.scalars().all()]
+
+@app.post("/processes")
+async def create_process(body: CreateProcess, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    if body.project_id:
+        project = await session.get(Project, body.project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+    proc = Process(
+        type=body.type,
+        command=body.command,
+        project_id=body.project_id,
+        task_id=body.task_id,
+        lane_id=body.lane_id,
+        status=body.status,
+    )
+    session.add(proc)
+    await session.flush()
+    return {"id": proc.id, "type": proc.type, "command": proc.command, "status": proc.status}
+
+@app.get("/processes/{process_id}")
+async def get_process(process_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    proc = await session.get(Process, process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    return {"id": proc.id, "type": proc.type, "command": proc.command, "pid": proc.pid,
+            "status": proc.status, "tty_info": proc.tty_info,
+            "project_id": proc.project_id, "task_id": proc.task_id, "lane_id": proc.lane_id}
+
+@app.put("/processes/{process_id}")
+async def update_process(process_id: str, body: UpdateProcess, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    proc = await session.get(Process, process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    if body.type is not None:
+        proc.type = body.type
+    if body.command is not None:
+        proc.command = body.command
+    if body.pid is not None:
+        proc.pid = body.pid
+    if body.status is not None:
+        proc.status = body.status
+    if body.tty_info is not None:
+        proc.tty_info = body.tty_info
+    await session.flush()
+    return {"id": proc.id, "type": proc.type, "status": proc.status}
+
+@app.delete("/processes/{process_id}")
+async def delete_process(process_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    proc = await session.get(Process, process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    await session.delete(proc)
+    await session.flush()
+    return {"status": "deleted"}
+
+
+# --- Runs ------------------------------------------------------------------
+
+@app.get("/runs")
+async def list_runs(
+    project_id: Optional[str] = None,
+    process_id: Optional[str] = None,
+    actor_id: Optional[str] = None,
+    status: Optional[str] = None,
+    _auth: str = Depends(verify_api_key),
+    session: AsyncSession = Depends(get_session)
+):
+    stmt = select(Run).order_by(Run.started_at.desc())
+    if project_id:
+        stmt = stmt.where(Run.project_id == project_id)
+    if process_id:
+        stmt = stmt.where(Run.process_id == process_id)
+    if actor_id:
+        stmt = stmt.where(Run.actor_id == actor_id)
+    if status:
+        stmt = stmt.where(Run.status == status)
+    result = await session.execute(stmt)
+    return [{"id": r.id, "project_id": r.project_id, "process_id": r.process_id,
+             "actor_id": r.actor_id, "cell_id": r.cell_id, "status": r.status,
+             "started_at": r.started_at.isoformat() if r.started_at else None}
+            for r in result.scalars().all()]
+
+@app.post("/runs")
+async def create_run(body: CreateRun, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    project = await session.get(Project, body.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    proc = await session.get(Process, body.process_id)
+    if not proc:
+        raise HTTPException(status_code=404, detail="Process not found")
+    if body.actor_id:
+        agent = await session.get(Agent, body.actor_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+    started = datetime.now(UTC)
+    if body.started_at:
+        started = datetime.fromisoformat(body.started_at.replace("Z", "+00:00"))
+    run = Run(
+        project_id=body.project_id,
+        process_id=body.process_id,
+        actor_id=body.actor_id,
+        cell_id=body.cell_id,
+        status=body.status,
+        input=body.input,
+        output=body.output,
+        started_at=started,
+    )
+    session.add(run)
+    await session.flush()
+    return {"id": run.id, "project_id": run.project_id, "process_id": run.process_id,
+            "status": run.status, "started_at": run.started_at.isoformat() if run.started_at else None}
+
+@app.get("/runs/{run_id}")
+async def get_run(run_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    run = await session.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {"id": run.id, "project_id": run.project_id, "process_id": run.process_id,
+            "actor_id": run.actor_id, "cell_id": run.cell_id, "input": run.input,
+            "output": run.output, "status": run.status,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "finished_at": run.finished_at.isoformat() if run.finished_at else None}
+
+@app.put("/runs/{run_id}")
+async def update_run(run_id: str, body: UpdateRun, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    run = await session.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if body.status is not None:
+        run.status = body.status
+    if body.output is not None:
+        run.output = body.output
+    if body.finished_at is not None:
+        run.finished_at = datetime.fromisoformat(body.finished_at.replace("Z", "+00:00"))
+    await session.flush()
+    return {"id": run.id, "status": run.status,
+            "finished_at": run.finished_at.isoformat() if run.finished_at else None}
+
+@app.delete("/runs/{run_id}")
+async def delete_run(run_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    run = await session.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    await session.delete(run)
     await session.flush()
     return {"status": "deleted"}
 
