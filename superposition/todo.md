@@ -15,7 +15,7 @@
 - [x] Establish Godot ↔ Python API contract (HTTP/WebSocket)
 - [x] Add cell execution support (shell/code cells)
 - [ ] Implement artifact linking from chat outputs
-- [ ] Enable task creation from messages/cells
+- [x] Enable task creation from messages/cells
 - [ ] Design agent scheduler and queue system
 - [ ] Implement approval workflow with risk/urgency/priority vectors
 - [ ] Add agent execution permissions model
