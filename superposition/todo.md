@@ -13,7 +13,7 @@
 - [x] Build terminal panel UI in Godot (TerminalPanel.tscn)
 - [x] Create Chatbook surface (Chatbook.tscn) with message threading
 - [x] Establish Godot ↔ Python API contract (HTTP/WebSocket)
-- [ ] Add cell execution support (shell/code cells)
+- [x] Add cell execution support (shell/code cells)
 - [ ] Implement artifact linking from chat outputs
 - [ ] Enable task creation from messages/cells
 - [ ] Design agent scheduler and queue system
