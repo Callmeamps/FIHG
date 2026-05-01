@@ -279,4 +279,4 @@ Implementation choices in the companion design doc are grounded in current offic
 - Godot UI structure
 - Python subprocess handling
 - FastAPI live APIs
-- PostgreSQL JSONB, full-text search, and LISTEN/NOTIFY
+- SQLite JSON1 extension for flexible metadata, full-text search in v2

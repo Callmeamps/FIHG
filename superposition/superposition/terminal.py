@@ -1,23 +1,26 @@
 """PTY-based terminal runtime for Unix systems.
 
 Manages real shell subprocesses with pseudo-terminal (PTY) support.
-Sessions are tracked in-memory; each session can emit stdout/stderr/exit events.
+Sessions are tracked in-memory; each session emits stdout/stderr via an
+asyncio.Queue and can be consumed through stream().
 
 Usage:
     runtime = TerminalRuntime()
     sess = await runtime.spawn("/bin/bash")
     await runtime.write(sess.id, "ls -la\\n")
-    async for line in runtime.stream(sess.id):
-        print(line)
+    async for chunk in runtime.stream(sess.id):
+        print(chunk, end="")
 """
 
+import asyncio
+import fcntl
 import os
 import pty
-import fcntl
-import termios
-import struct
 import signal
-import asyncio
+import struct
+import termios
+import time
+import uuid
 from dataclasses import dataclass, field
 from typing import AsyncIterator, Optional
 
@@ -32,7 +35,8 @@ class TermSession:
     status: str = "running"  # running, closed, errored
     exit_code: Optional[int] = None
     buffer: str = ""
-    created_at: float = field(default_factory=lambda: __import__("time").time())
+    created_at: float = field(default_factory=time.time)
+    queue: asyncio.Queue[str] = field(default_factory=asyncio.Queue)
 
 
 class TerminalRuntime:
@@ -52,7 +56,7 @@ class TerminalRuntime:
         Returns:
             A TermSession object with the allocated PTY.
         """
-        session_id = str(__import__("uuid").uuid4())
+        session_id = str(uuid.uuid4())
         pid, fd = pty.fork()
 
         if pid == 0:
@@ -112,34 +116,70 @@ class TerminalRuntime:
             pass
         finally:
             session.status = "closed"
+            await session.queue.put(None)  # signal end of stream
             try:
                 os.close(session.fd)
             except OSError:
                 pass
 
-    async def stream(self, session_id: str) -> AsyncIterator[str]:
-        """Async generator yielding lines of output from the session."""
+    async def stream(
+        self, session_id: str, full_output: bool = False
+    ) -> AsyncIterator[str]:
+        """Yield output chunks as they arrive from the PTY.
+
+        Args:
+            session_id: ID of the session to stream.
+            full_output: If True, yield the existing buffer first before
+                         streaming live data. Use to capture full session
+                         history (e.g., after a cell has finished running).
+                         If False, only stream new data from the queue.
+
+        Yields:
+            Raw output chunks (bytes decoded as strings).
+        """
         session = self._sessions.get(session_id)
         if not session:
             return
-        # Return existing buffer + new output via polling
-        # (In production, use an asyncio.Queue per session)
-        yield session.buffer
-        raise StopAsyncIteration
+
+        if full_output:
+            yield session.buffer
+
+        while session.status == "running":
+            try:
+                chunk = await session.queue.get()
+            except asyncio.CancelledError:
+                break
+            if chunk is None:
+                break
+            yield chunk
+
+        # Drain any remaining queued output after session closes
+        if session.status == "closed":
+            while not session.queue.empty():
+                try:
+                    chunk = session.queue.get_nowait()
+                    if chunk is None:
+                        break
+                    yield chunk
+                except asyncio.QueueEmpty:
+                    break
 
     async def _read_loop(self, session: TermSession) -> None:
-        """Background task: read PTY output and buffer it."""
+        """Background task: read PTY output and push to session queue."""
         loop = asyncio.get_running_loop()
         try:
             while session.status == "running":
                 data = await loop.run_in_executor(None, os.read, session.fd, 4096)
                 if not data:
                     break
-                session.buffer += data.decode(errors="replace")
+                decoded = data.decode(errors="replace")
+                session.buffer += decoded
+                await session.queue.put(decoded)
         except (OSError, BlockingIOError):
             pass
         finally:
             session.status = "closed"
+            await session.queue.put(None)  # mark end of stream
             try:
                 _, status = os.waitpid(session.pid, os.WNOHANG)
                 session.exit_code = os.WEXITSTATUS(status) if os.WIFEXITED(status) else -1

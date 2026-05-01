@@ -38,16 +38,16 @@ Why:
 FastAPI is a strong fit for the local core because it is a Python web framework for APIs, includes WebSocket support, and generates OpenAPI metadata automatically. [2]
 
 ### Data layer
-**Postgres** is the primary database.
+**SQLite** is the primary database for now.
 
 Why:
-- relational truth for projects, tasks, agents, runs, and permissions
-- JSONB for flexible metadata
-- full-text search for artifacts, logs, and chat content
-- LISTEN/NOTIFY for low-friction inter-process events
-- future sync and multi-process access are easier than with a file-only store
+- zero-config, single-file storage
+- relational truth for projects, tasks, agents, runs
+- works everywhere without a server process
+- fast enough for single-user local-first
+- future migration to PostgreSQL is straightforward when multi-process access is needed
 
-PostgreSQL documentation recommends `jsonb` for most applications when storing JSON data, because it is faster to process and supports indexing. It also has built-in full-text search and LISTEN/NOTIFY for asynchronous notification between sessions. [3][4][5]
+SQLite with `aiosqlite` for async access keeps the stack simple and portable. JSON columns replace JSONB; full-text search is a v2 concern.
 
 ### Artifact storage
 Use local files for large or binary artifacts, with database rows storing:
@@ -62,7 +62,7 @@ Use local files for large or binary artifacts, with database rows storing:
 ```text
 Godot UI
   └─ talks to ─> Python Core API
-                   ├─ Postgres
+                   ├─ SQLite
                    ├─ Artifact files
                    ├─ Shell / PTY runtime
                    ├─ Agent scheduler
@@ -229,15 +229,14 @@ Design implication:
 ### 5.2 Eventing
 For live updates, use one of:
 - FastAPI WebSockets between UI and core
-- Postgres LISTEN/NOTIFY for internal process fanout
-- both together
+- asyncio event queues for internal process fanout
 
 FastAPI supports WebSockets directly. [8]
-Postgres LISTEN/NOTIFY provides simple interprocess notification among sessions in the same database. [4][5]
+asyncio event queues provide lightweight internal event propagation.
 
 Recommended split:
-- WebSocket: UI live stream
-- LISTEN/NOTIFY: backend process wakeups and lightweight event propagation
+- WebSocket: UI live stream for terminal output
+- asyncio: backend process wakeups and internal event propagation
 
 ## 6. API contract
 
@@ -356,18 +355,18 @@ Recommended pattern:
 
 ## 10. Data model strategy
 
-### Recommended storage split
-**Postgres**
+### Recommended split
+**SQLite**
 - projects
 - tasks
 - artifacts metadata
 - agents
 - processes
 - runs
-- approvals
 - logs
 - layouts
 - lanes
+- JSON columns for flexible metadata
 
 **Filesystem**
 - large artifact bodies
@@ -375,15 +374,17 @@ Recommended pattern:
 - binary blobs
 - generated outputs
 
-### Why JSONB
-Use JSONB for flexible metadata such as:
+### Why JSON columns
+Use JSON columns for flexible metadata such as:
 - artifact tags
 - terminal session settings
 - agent configuration
 - layout state
 - task extras
 
-Postgres recommends JSONB for most applications because it is faster to process and indexable. [3]
+SQLite JSON1 extension provides basic JSON read/write via `json_each` and `json_extract`.
+
+Full-text search is a v2 concern.
 
 ### Why full-text search
 Use full-text search for:
@@ -412,7 +413,7 @@ Later, logs can be expanded into more structured event history.
 
 ### Milestone 1
 - Python service
-- Postgres schema
+- SQLite schema
 - project/task/artifact tables
 - dashboard shell
 - lane model
@@ -464,9 +465,9 @@ Agents need policy gates or they become noisy and hard to debug.
 
 ## 15. Recommended implementation plan
 
-1. Build the Postgres schema.
+1. Build the SQLite schema.
 2. Build the Python FastAPI core.
-3. Add event streaming.
+3. Add WebSocket event streaming.
 4. Add the Godot shell with left rail / viewport / terminal dock.
 5. Add projects, tasks, and artifacts.
 6. Add Chatbooks.
@@ -477,9 +478,7 @@ Agents need policy gates or they become noisy and hard to debug.
 
 [1] Godot Engine documentation: `Control`, `Viewport`, `SubViewportContainer`  
 [2] FastAPI official documentation  
-[3] PostgreSQL official documentation: JSON types / JSONB  
-[4] PostgreSQL official documentation: LISTEN / NOTIFY  
-[5] PostgreSQL official documentation: Full Text Search  
+[3] SQLite official documentation: JSON1 extension
 [6] Python official documentation: `asyncio.subprocess`  
 [7] Python official documentation: `pty`  
 [8] FastAPI official documentation: WebSockets

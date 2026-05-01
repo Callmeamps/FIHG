@@ -1,11 +1,11 @@
 # Superposition — Implementation Tasks
 
-## Phase 1: Python Core + Postgres Foundation
-- [x] Set up Python project structure (uv, FastAPI, SQLAlchemy, psycopg)
-- [x] Define and apply Postgres schema (projects, tasks, artifacts, etc.)
+## Phase 1: Python Core + SQLite Foundation
+- [x] Set up Python project structure (uv, FastAPI, SQLAlchemy, aiosqlite)
+- [x] Define and apply SQLite schema (projects, tasks, artifacts, etc.)
 - [x] Build core service with healthcheck endpoint and DB connection
-- [x] Verify database connectivity and table creation (SQLite)
-- [x] Add basic event streaming (WebSocket + LISTEN/NOTIFY plan)
+- [x] Verify database connectivity and table creation
+- [x] Add WebSocket event streaming (terminal output delivery)
 - [x] Write simple tests for core models and API
 
 ## Phase 2: Terminal + Chatbooks
@@ -27,7 +27,7 @@
 - [ ] Build activity timeline view
 - [ ] Add automation playlists support
 - [ ] Implement calendar hooks (basic)
-- [ ] Enhance search (full-text across artifacts, logs, chat)
+- [ ] Enhance search (across artifacts, logs, chat)
 - [ ] Layout persistence for lanes
 - [ ] Basic performance testing and optimization
 
@@ -50,7 +50,7 @@
 - [x] All 33 tests pass (18 original + 15 new)
 
 ### Remaining (see bd issues)
-- [ ] Add auth and rate limiting (bd: Projects-grp, P1)
+- [ ] Add auth tokens and CORS middleware (bd: Projects-grp, P1)
 - [x] source_ref in Artifact unvalidated (bd: Projects-iam, P2) — Pydantic + CheckConstraint
 - [x] TerminalRuntime uses asyncio.get_event_loop() in __init__ (bd: Projects-riq, P2) — fixed
 - [ ] No CI (bd: Projects-vp1, P2)

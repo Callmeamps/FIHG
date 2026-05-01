@@ -45,3 +45,48 @@ async def test_write_to_closed_session(runtime):
     await runtime.close(sess.id)
     with pytest.raises(RuntimeError, match="not running"):
         await runtime.write(sess.id, "data")
+
+@pytest.mark.asyncio
+async def test_stream_live_output(runtime):
+    """stream() yields new output from the queue as it arrives."""
+    sess = await runtime.spawn()
+    await runtime.write(sess.id, "echo stream-test\n")
+    # Wait for output to arrive
+    import asyncio
+    await asyncio.sleep(0.3)
+    chunks = []
+    async for chunk in runtime.stream(sess.id):
+        chunks.append(chunk)
+        break  # one chunk is enough to prove the queue works
+    assert any("stream-test" in c for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_stream_full_output_yields_existing_buffer(runtime):
+    """stream(full_output=True) yields existing buffer first."""
+    sess = await runtime.spawn()
+    await runtime.write(sess.id, "echo partial\n")
+    import asyncio
+    await asyncio.sleep(0.3)
+    assert "partial" in sess.buffer  # confirm buffer has data
+    chunks = []
+    async for chunk in runtime.stream(sess.id, full_output=True):
+        chunks.append(chunk)
+        break
+    # full_output=True must include existing buffer
+    assert any("partial" in c for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_stream_ends_after_close(runtime):
+    """stream() terminates after session is closed."""
+    sess = await runtime.spawn()
+    await runtime.write(sess.id, "echo done\n")
+    import asyncio
+    await asyncio.sleep(0.3)
+    await runtime.close(sess.id)
+    chunks = []
+    async for chunk in runtime.stream(sess.id):
+        chunks.append(chunk)
+    # session closed — no error, chunks collected
+    assert sess.status == "closed"
