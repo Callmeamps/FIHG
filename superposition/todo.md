@@ -47,22 +47,41 @@
 - [x] Cell execution creates Run record (provenance model)
 - [x] Missing endpoints: GET /tasks, GET /chatbooks/{id}, DELETE/PUT chatbooks/artifacts/cells
 - [x] Artifact create validates project exists
-- [x] All 33 tests pass (18 original + 15 new)
+- [x] source_ref validated: Pydantic field_validator + SQLAlchemy CheckConstraint
+- [x] TerminalRuntime: asyncio.Queue streaming with full_output toggle
+- [x] SQLite-only (no postgres dependency, zero-config)
+- [x] All 38 tests pass (18 original + 20 new)
 
-### Remaining (see bd issues)
-- [ ] Add auth tokens and CORS middleware (bd: Projects-grp, P1)
-- [x] source_ref in Artifact unvalidated (bd: Projects-iam, P2) — Pydantic + CheckConstraint
-- [x] TerminalRuntime uses asyncio.get_event_loop() in __init__ (bd: Projects-riq, P2) — fixed
-- [ ] No CI (bd: Projects-vp1, P2)
-- [x] No seed script/fixtures (bd: Projects-5ik, P2) — scripts/seed.py
-- [ ] get_session fragile commit pattern (bd: Projects-8w6, P3)
-- [ ] test_models.py uses AsyncSessionLocal directly (bd: Projects-ilq, P3)
-- [ ] No Makefile shortcuts (bd: Projects-1vq, P3)
+### Docs — updated (2026-05-01)
+- [x] Design doc: Postgres → SQLite throughout
+- [x] PRD: Postgres → SQLite
+- [x] UBIQUITOUS_LANGUAGE: LISTEN/NOTIFY → WebSocket
+
+## Remaining (see bd issues)
+### P1
+- [ ] Add auth tokens + CORS (Projects-grp)
+### P2 Backend
+- [ ] GET /dashboard (Projects-a3h)
+- [ ] Agent CRUD (Projects-cvo)
+- [ ] Process CRUD (Projects-6bl)
+- [ ] Run CRUD (Projects-6m1)
+- [ ] Approval system (Projects-rel)
+- [ ] Lane endpoints (Projects-tm7)
+- [ ] No CI (Projects-vp1)
+### P3 Backend
+- [ ] get_session fragile commit pattern (Projects-8w6)
+- [ ] test_models uses AsyncSessionLocal directly (Projects-ilq)
+- [ ] No Makefile shortcuts (Projects-1vq)
+- [ ] GET /chatbooks/{id}/messages (Projects-qtp)
+- [ ] Cell-to-task conversion (Projects-6tm)
+- [ ] Task pause/resume/cancel (Projects-wnm)
+### P3 Frontend
+- [ ] Inspector.tscn + Activity.tscn (Projects-arq)
 
 ## Infrastructure
 - [x] Set up Godot project structure (scenes, UI components)
 - [x] Establish Godot ↔ Python API contract (HTTP/WebSocket)
-- [x] Remove Docker Compose for local dev (Python + Postgres)
+- [x] Remove Docker Compose for local dev (Python + SQLite)
 - [x] Configure development environment scripts
 
 ## Ubiquitous Language Refactor
