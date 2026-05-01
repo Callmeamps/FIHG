@@ -51,10 +51,10 @@
 
 ### Remaining (see bd issues)
 - [ ] Add auth and rate limiting (bd: Projects-grp, P1)
-- [ ] source_ref in Artifact unvalidated (bd: Projects-iam, P2)
-- [ ] TerminalRuntime uses asyncio.get_event_loop() in __init__ (bd: Projects-riq, P2)
+- [x] source_ref in Artifact unvalidated (bd: Projects-iam, P2) — Pydantic + CheckConstraint
+- [x] TerminalRuntime uses asyncio.get_event_loop() in __init__ (bd: Projects-riq, P2) — fixed
 - [ ] No CI (bd: Projects-vp1, P2)
-- [ ] No seed script/fixtures (bd: Projects-5ik, P2)
+- [x] No seed script/fixtures (bd: Projects-5ik, P2) — scripts/seed.py
 - [ ] get_session fragile commit pattern (bd: Projects-8w6, P3)
 - [ ] test_models.py uses AsyncSessionLocal directly (bd: Projects-ilq, P3)
 - [ ] No Makefile shortcuts (bd: Projects-1vq, P3)
