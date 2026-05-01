@@ -92,6 +92,19 @@ class UpdateArtifact(BaseModel):
     content_text: Optional[str] = None
     tags: Optional[list[str]] = None
 
+class CreateLane(BaseModel):
+    title: str
+    active_project_id: Optional[str] = None
+
+
+class UpdateLane(BaseModel):
+    title: Optional[str] = None
+    active_project_id: Optional[str] = None
+    layout_state: Optional[dict] = None
+    pinned_panels: Optional[list] = None
+    recent_items: Optional[list] = None
+
+
 class ExecuteCell(BaseModel):
     language: str = "shell"
     source: str
@@ -343,6 +356,70 @@ async def send_message(chatbook_id: str, body: SendMessage, _auth: str = Depends
     session.add(msg)
     await session.flush()
     return {"id": msg.id, "role": msg.role, "content": msg.content}
+
+
+# --- Lanes ------------------------------------------------------------------
+
+@app.get("/lanes")
+async def list_lanes(_auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(Lane).order_by(Lane.created_at.desc()))
+    return [{"id": l.id, "title": l.title, "active_project_id": l.active_project_id,
+             "created_at": l.created_at.isoformat() if l.created_at else None}
+            for l in result.scalars().all()]
+
+@app.post("/lanes")
+async def create_lane(body: CreateLane, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    if body.active_project_id:
+        project = await session.get(Project, body.active_project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+    lane = Lane(title=body.title, active_project_id=body.active_project_id)
+    session.add(lane)
+    await session.flush()
+    return {"id": lane.id, "title": lane.title, "active_project_id": lane.active_project_id,
+            "created_at": lane.created_at.isoformat() if lane.created_at else None}
+
+@app.get("/lanes/{lane_id}")
+async def get_lane(lane_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    lane = await session.get(Lane, lane_id)
+    if not lane:
+        raise HTTPException(status_code=404, detail="Lane not found")
+    return {"id": lane.id, "title": lane.title, "active_project_id": lane.active_project_id,
+            "layout_state": lane.layout_state, "pinned_panels": lane.pinned_panels,
+            "recent_items": lane.recent_items,
+            "created_at": lane.created_at.isoformat() if lane.created_at else None,
+            "updated_at": lane.updated_at.isoformat() if lane.updated_at else None}
+
+@app.put("/lanes/{lane_id}")
+async def update_lane(lane_id: str, body: UpdateLane, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    lane = await session.get(Lane, lane_id)
+    if not lane:
+        raise HTTPException(status_code=404, detail="Lane not found")
+    if body.active_project_id is not None:
+        if body.active_project_id != "":
+            project = await session.get(Project, body.active_project_id)
+            if not project:
+                raise HTTPException(status_code=404, detail="Project not found")
+        lane.active_project_id = body.active_project_id if body.active_project_id != "" else None
+    if body.title is not None:
+        lane.title = body.title
+    if body.layout_state is not None:
+        lane.layout_state = body.layout_state
+    if body.pinned_panels is not None:
+        lane.pinned_panels = body.pinned_panels
+    if body.recent_items is not None:
+        lane.recent_items = body.recent_items
+    await session.flush()
+    return {"id": lane.id, "title": lane.title, "active_project_id": lane.active_project_id}
+
+@app.delete("/lanes/{lane_id}")
+async def delete_lane(lane_id: str, _auth: str = Depends(verify_api_key), session: AsyncSession = Depends(get_session)):
+    lane = await session.get(Lane, lane_id)
+    if not lane:
+        raise HTTPException(status_code=404, detail="Lane not found")
+    await session.delete(lane)
+    await session.flush()
+    return {"status": "deleted"}
 
 
 # --- Terminal sessions -----------------------------------------------------

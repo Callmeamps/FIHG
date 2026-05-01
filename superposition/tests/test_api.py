@@ -467,3 +467,82 @@ def test_health_always_open():
         r = client.get("/health")
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
+
+
+def test_lane_crud():
+    with TestClient(app) as client:
+        # Create project (to assign to lane)
+        r = client.post("/projects", json={"title": "Lane Test Project"})
+        pid = r.json()["id"]
+
+        # Create lane
+        r = client.post("/lanes", json={"title": "My Lane", "active_project_id": pid})
+        assert r.status_code == 200
+        lid = r.json()["id"]
+        assert r.json()["title"] == "My Lane"
+        assert r.json()["active_project_id"] == pid
+
+        # List lanes
+        r = client.get("/lanes")
+        assert r.status_code == 200
+        assert any(l["id"] == lid for l in r.json())
+
+        # Get lane
+        r = client.get(f"/lanes/{lid}")
+        assert r.status_code == 200
+        assert r.json()["title"] == "My Lane"
+        assert r.json()["active_project_id"] == pid
+        assert r.json()["layout_state"] is None
+
+        # Switch active project (lane switching)
+        r2 = client.post("/projects", json={"title": "Other Project"})
+        pid2 = r2.json()["id"]
+        r = client.put(f"/lanes/{lid}", json={"active_project_id": pid2})
+        assert r.status_code == 200
+        assert r.json()["active_project_id"] == pid2
+
+        # Clear active project
+        r = client.put(f"/lanes/{lid}", json={"active_project_id": ""})
+        assert r.status_code == 200
+        assert r.json()["active_project_id"] is None
+
+        # Update title
+        r = client.put(f"/lanes/{lid}", json={"title": "Renamed Lane"})
+        assert r.status_code == 200
+        assert r.json()["title"] == "Renamed Lane"
+
+        # Delete lane
+        r = client.delete(f"/lanes/{lid}")
+        assert r.status_code == 200
+
+        # Not found
+        r = client.get(f"/lanes/{lid}")
+        assert r.status_code == 404
+
+
+def test_lane_switch_invalid_project():
+    with TestClient(app) as client:
+        r = client.post("/lanes", json={"title": "Lane"})
+        assert r.status_code == 200
+        lid = r.json()["id"]
+
+        # Try to set invalid project
+        r = client.put(f"/lanes/{lid}", json={"active_project_id": "nonexistent-id"})
+        assert r.status_code == 404
+        assert "Project not found" in r.json()["detail"]
+
+
+def test_lane_create_invalid_project():
+    with TestClient(app) as client:
+        r = client.post("/lanes", json={"title": "Lane", "active_project_id": "bad-id"})
+        assert r.status_code == 404
+
+
+def test_lane_not_found():
+    with TestClient(app) as client:
+        r = client.get("/lanes/fake-id")
+        assert r.status_code == 404
+        r = client.put("/lanes/fake-id", json={"title": "X"})
+        assert r.status_code == 404
+        r = client.delete("/lanes/fake-id")
+        assert r.status_code == 404
