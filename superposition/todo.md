@@ -14,7 +14,7 @@
 - [x] Create Chatbook surface (Chatbook.tscn) with message threading
 - [x] Establish Godot ↔ Python API contract (HTTP/WebSocket)
 - [x] Add cell execution support (shell/code cells)
-- [ ] Implement artifact linking from chat outputs
+- [x] Implement artifact linking from chat outputs
 - [x] Enable task creation from messages/cells
 - [ ] Design agent scheduler and queue system
 - [ ] Implement approval workflow with risk/urgency/priority vectors
