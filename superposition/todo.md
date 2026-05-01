@@ -9,14 +9,13 @@
 - [x] Write simple tests for core models and API
 
 ## Phase 2: Terminal + Chatbooks
-- [ ] Implement PTY-based terminal runtime (Unix support)
-- [ ] Build terminal panel UI in Godot (TerminalPanel.tscn)
-- [ ] Create Chatbook surface (Chatbook.tscn) with message threading
+- [x] Implement PTY-based terminal runtime (Unix support)
+- [x] Build terminal panel UI in Godot (TerminalPanel.tscn)
+- [x] Create Chatbook surface (Chatbook.tscn) with message threading
+- [x] Establish Godot ↔ Python API contract (HTTP/WebSocket)
 - [ ] Add cell execution support (shell/code cells)
 - [ ] Implement artifact linking from chat outputs
 - [ ] Enable task creation from messages/cells
-
-## Phase 3: Agents + Approvals
 - [ ] Design agent scheduler and queue system
 - [ ] Implement approval workflow with risk/urgency/priority vectors
 - [ ] Add agent execution permissions model
@@ -33,10 +32,10 @@
 - [ ] Basic performance testing and optimization
 
 ## Infrastructure
-- [ ] Set up Godot project structure (scenes, UI components)
-- [ ] Establish Godot ↔ Python API contract (HTTP/WebSocket)
+- [x] Set up Godot project structure (scenes, UI components)
+- [x] Establish Godot ↔ Python API contract (HTTP/WebSocket)
 - [x] Remove Docker Compose for local dev (Python + Postgres)
-- [ ] Configure development environment scripts
+- [x] Configure development environment scripts
 
 ## Ubiquitous Language Refactor
 
