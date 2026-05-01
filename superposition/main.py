@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select
 
 import superposition.models  # noqa: F401
-from superposition.models import Project, Task, Artifact, Agent, Process, Run, Lane, Chatbook, Message
+from superposition.models import Project, Task, Artifact, Agent, Process, Run, Lane, Chatbook, Message, Cell
 
 
 # --- Pydantic schemas -------------------------------------------------------
@@ -40,6 +40,16 @@ class SpawnTerminal(BaseModel):
 
 class WriteTerminal(BaseModel):
     data: str
+
+
+class CreateCell(BaseModel):
+    chatbook_id: str
+    language: str = "shell"
+    source: str
+
+class ExecuteCell(BaseModel):
+    language: str = "shell"
+    source: str
 
 
 # --- Connection manager ----------------------------------------------------
@@ -188,6 +198,103 @@ async def terminal_close(session_id: str):
 async def list_terminal_sessions():
     return {"sessions": [{"id": s.id, "status": s.status, "pid": s.pid}
                          for s in terminal_runtime.sessions.values()]}
+
+
+# --- Cell execution -------------------------------------------------------
+
+async def _run_cell(source: str, language: str = "shell") -> tuple[str, str, str]:
+    """Execute a cell and return (output, status, session_buffer)."""
+    if language == "shell":
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["/bin/bash", "-c", source],
+                capture_output=True, text=True, timeout=30
+            )
+            output = result.stdout + result.stderr
+            status = "success" if result.returncode == 0 else "error"
+            return output, status, output
+        except subprocess.TimeoutExpired:
+            return "Timed out", "error", ""
+    elif language == "python":
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["python3", "-c", source],
+                capture_output=True, text=True, timeout=30
+            )
+            output = result.stdout + result.stderr
+            status = "success" if result.returncode == 0 else "error"
+            return output, status, output
+        except subprocess.TimeoutExpired:
+            return "Timed out", "error", ""
+    else:
+        return f"Unsupported language: {language}", "error", ""
+
+
+@app.post("/chatbooks/{chatbook_id}/cells")
+async def create_and_execute_cell(
+    chatbook_id: str,
+    body: ExecuteCell,
+    session: AsyncSession = Depends(get_session)
+):
+    """Create a cell, execute it, and store the result."""
+    # Get the chatbook for project context
+    chatbook = await session.get(Chatbook, chatbook_id)
+    if not chatbook:
+        raise HTTPException(status_code=404, detail="Chatbook not found")
+
+    # Determine next index
+    result = await session.execute(
+        select(Cell).where(Cell.chatbook_id == chatbook_id).order_by(Cell.index.desc()).limit(1)
+    )
+    last_cell = result.scalar_one_or_none()
+    next_index = (last_cell.index + 1) if last_cell else 0
+
+    # Create cell
+    cell = Cell(
+        chatbook_id=chatbook_id,
+        index=next_index,
+        language=body.language,
+        source=body.source,
+        status="running",
+        started_at=datetime.utcnow(),
+    )
+    session.add(cell)
+    await session.flush()
+
+    # Execute
+    output, status, full_buffer = await _run_cell(body.source, body.language)
+
+    # Update cell
+    cell.status = status
+    cell.output = output
+    cell.finished_at = datetime.utcnow()
+    await session.flush()
+
+    return {
+        "id": cell.id,
+        "index": cell.index,
+        "language": cell.language,
+        "source": cell.source,
+        "output": cell.output,
+        "status": cell.status,
+        "started_at": cell.started_at.isoformat() if cell.started_at else None,
+        "finished_at": cell.finished_at.isoformat() if cell.finished_at else None,
+    }
+
+
+@app.get("/chatbooks/{chatbook_id}/cells")
+async def list_cells(chatbook_id: str, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(
+        select(Cell).where(Cell.chatbook_id == chatbook_id).order_by(Cell.index)
+    )
+    return [{
+        "id": c.id, "index": c.index, "language": c.language,
+        "source": c.source, "output": c.output, "status": c.status,
+        "started_at": c.started_at.isoformat() if c.started_at else None,
+        "finished_at": c.finished_at.isoformat() if c.finished_at else None,
+    } for c in result.scalars().all()]
 
 
 # --- WebSocket (events + terminal output streaming) -----------------------

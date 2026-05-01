@@ -108,6 +108,7 @@ class Run(Base):
     project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     process_id = Column(String(36), ForeignKey("processes.id", ondelete="CASCADE"), nullable=False)
     actor_id = Column(String(36), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    cell_id = Column(String(36), ForeignKey("cells.id", ondelete="SET NULL"), nullable=True)
     input = Column(JSON, nullable=True)
     output = Column(Text, nullable=True)
     status = Column(String, nullable=False)
@@ -117,6 +118,7 @@ class Run(Base):
     process = relationship("Process", back_populates="runs")
     actor = relationship("Agent", back_populates="runs")
     project = relationship("Project", back_populates="runs")
+    cell = relationship("Cell", back_populates="run")
 
 
 class Lane(Base):
@@ -146,6 +148,7 @@ class Chatbook(Base):
 
     project = relationship("Project", backref="chatbooks")
     messages = relationship("Message", back_populates="chatbook", cascade="all, delete-orphan", order_by="Message.created_at")
+    cells = relationship("Cell", back_populates="chatbook", cascade="all, delete-orphan", order_by="Cell.index")
 
 
 class Message(Base):
@@ -160,3 +163,21 @@ class Message(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     chatbook = relationship("Chatbook", back_populates="messages")
+
+
+class Cell(Base):
+    __tablename__ = "cells"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    chatbook_id = Column(String(36), ForeignKey("chatbooks.id", ondelete="CASCADE"), nullable=False)
+    index = Column(Integer, nullable=False, default=0)
+    language = Column(String, nullable=False, default="shell")  # shell, python, etc.
+    source = Column(Text, nullable=False)
+    output = Column(Text, nullable=True)
+    status = Column(String, nullable=False, default="pending")  # pending, running, success, error
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    chatbook = relationship("Chatbook", back_populates="cells")
+    run = relationship("Run", uselist=False, back_populates="cell", cascade="all, delete-orphan")
