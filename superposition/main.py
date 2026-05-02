@@ -446,7 +446,6 @@ async def pause_task(task_id: str, _auth: str = Depends(verify_api_key), session
     task.status = "paused"
     await session.flush()
     await _write_log(session, "task.paused", "task", task.id, {"by": "user"})
-    await session.commit()
     return {"id": task.id, "status": task.status}
 
 
@@ -460,7 +459,6 @@ async def resume_task(task_id: str, _auth: str = Depends(verify_api_key), sessio
     task.status = "in_progress"
     await session.flush()
     await _write_log(session, "task.resumed", "task", task.id, {"by": "user"})
-    await session.commit()
     return {"id": task.id, "status": task.status}
 
 
@@ -474,7 +472,6 @@ async def cancel_task(task_id: str, _auth: str = Depends(verify_api_key), sessio
     task.status = "cancelled"
     await session.flush()
     await _write_log(session, "task.cancelled", "task", task.id, {"by": "user"})
-    await session.commit()
     return {"id": task.id, "status": task.status}
 
 
@@ -1034,7 +1031,6 @@ async def respond_approval(approval_id: str, body: RespondApproval, _auth: str =
     await session.flush()
     await _write_log(session, "approval.responded", "approval", approval.id, {
         "decision": body.decision, "reason": body.reason})
-    await session.commit()
     return {"id": approval.id, "status": approval.status, "reason": approval.reason,
             "responded_at": approval.responded_at.isoformat() if approval.responded_at else None}
 

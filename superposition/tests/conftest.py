@@ -10,7 +10,7 @@ import asyncio
 # Ensure models are registered
 import superposition.models  # noqa: F401
 
-from superposition.db import engine, Base
+from superposition.db import engine, Base, get_session as _db_get_session
 from main import verify_api_key
 
 # Bypass auth in all tests
@@ -34,6 +34,25 @@ async def setup_database():
         await conn.run_sync(Base.metadata.create_all)
     yield
     # Could drop tables here if desired
+
+
+@pytest_asyncio.fixture
+async def get_session():
+    """Yield a session from the same factory routes use.
+
+    Rolls back at fixture end so tests are isolated.
+    Tests must clean up their own data via session.delete.
+    """
+    gen = _db_get_session()
+    session = await gen.__anext__()
+    try:
+        yield session
+    finally:
+        await session.rollback()
+        try:
+            await gen.__anext__()
+        except StopAsyncIteration:
+            pass
 
 
 @pytest.fixture(scope="session")
