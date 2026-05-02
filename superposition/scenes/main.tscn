@@ -35,6 +35,10 @@ text = "Projects"
 layout_mode = 2
 text = "Chatbooks"
 
+[node name="ActivityBtn" type="Button" parent="LeftRail"]
+layout_mode = 2
+text = "Activity"
+
 [node name="AgentsBtn" type="Button" parent="LeftRail"]
 layout_mode = 2
 text = "Agents"
@@ -43,6 +47,20 @@ text = "Agents"
 layout_mode = 1
 anchors_preset = 11
 anchor_left = 0.15
+anchor_right = 0.85
+anchor_top = 0.0
+anchor_bottom = 0.7
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="InspectorViewport" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_left = 0.85
 anchor_right = 1.0
 anchor_top = 0.0
 anchor_bottom = 0.7

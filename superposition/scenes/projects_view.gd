@@ -42,7 +42,10 @@ func _refresh_list():
 		list.add_child(btn)
 
 func _on_project_clicked(project: Dictionary):
-	push_warning("Project clicked: %s (not implemented)" % str(project.get("title")))
+	# Populate the inspector panel with project details
+	var main = get_node("/root/Main")
+	if main and main.has_method("inspect"):
+		main.inspect("project", project.get("id", ""))
 
 func _on_create_project():
 	var title = create_input.text.strip_edges()

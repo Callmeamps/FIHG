@@ -1,0 +1,104 @@
+[gd_scene load_steps=2 format=3 uid="uid://bact7v3nt1y2z"]
+
+[ext_resource type="Script" path="res://scenes/activity.gd" id="1_activity"]
+
+[node name="Activity" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_activity")
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 0.0
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 56.0
+grow_horizontal = 2
+text = "Activity"
+theme_override_font_sizes/font_size = 24
+
+[node name="FiltersRow" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = 16.0
+offset_top = 64.0
+offset_right = -16.0
+offset_bottom = 96.0
+grow_horizontal = 2
+
+[node name="FilterType" type="OptionButton" parent="FiltersRow"]
+layout_mode = 2
+text = "all"
+fit_to_longest_item = false
+
+[node name="VSeparator" type="VSeparator" parent="FiltersRow"]
+layout_mode = 2
+
+[node name="FilterEvent" type="LineEdit" parent="FiltersRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "filter by event (e.g. task.created)"
+
+[node name="Separator" type="HSeparator" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = 16.0
+offset_top = 104.0
+offset_right = -16.0
+offset_bottom = 112.0
+grow_horizontal = 2
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 120.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="Feed" type="VBoxContainer" parent="Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="EmptyLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 120.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "No events yet. Trigger some actions to see them here."
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_colors/font_color = Color(0.4, 0.4, 0.4, 1)
+
+[node name="PollTimer" type="Timer" parent="."]
+wait_time = 5.0
+one_shot = true

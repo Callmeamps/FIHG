@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select
 
 import superposition.models  # noqa: F401
-from superposition.models import Project, Task, Artifact, Agent, Process, Run, Lane, Chatbook, Message, Cell, Approval
+from superposition.models import Project, Task, Artifact, Agent, Process, Run, Lane, Chatbook, Message, Cell, Approval, Log
 
 
 # --- Pydantic schemas -------------------------------------------------------
@@ -184,7 +184,24 @@ class ExecuteCell(BaseModel):
     source: str
 
 
-# --- Auth & rate limiting ---------------------------------------------------
+class LogEntry(BaseModel):
+    id: str
+    event: str
+    entity_type: str
+    entity_id: str
+    detail: Optional[dict] = None
+    created_at: str
+
+
+# --- Helpers ----------------------------------------------------------------
+
+async def _write_log(session: AsyncSession, event: str, entity_type: str, entity_id: str, detail: Optional[dict] = None):
+    """Append a log entry. Does NOT commit — caller decides when to persist."""
+    log = Log(event=event, entity_type=entity_type, entity_id=entity_id, detail=detail)
+    session.add(log)
+    await session.flush()
+
+
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[os.environ.get("RATE_LIMIT", "60/min")])
 
@@ -342,6 +359,7 @@ async def create_project(body: CreateProject, _auth: str = Depends(verify_api_ke
     project = Project(title=body.title, description=body.description)
     session.add(project)
     await session.flush()
+    await _write_log(session, "project.created", "project", project.id)
     return {"id": project.id, "title": project.title, "status": project.status}
 
 @app.get("/projects/{project_id}")
@@ -392,6 +410,7 @@ async def create_task(body: CreateTask, _auth: str = Depends(verify_api_key), se
     task = Task(project_id=body.project_id, title=body.title, status=body.status)
     session.add(task)
     await session.flush()
+    await _write_log(session, "task.created", "task", task.id, {"project_id": task.project_id})
     return {"id": task.id, "title": task.title, "status": task.status}
 
 @app.get("/tasks/{task_id}")
@@ -426,6 +445,7 @@ async def pause_task(task_id: str, _auth: str = Depends(verify_api_key), session
         raise HTTPException(status_code=409, detail=f"Cannot pause a {task.status} task")
     task.status = "paused"
     await session.flush()
+    await _write_log(session, "task.paused", "task", task.id, {"by": "user"})
     await session.commit()
     return {"id": task.id, "status": task.status}
 
@@ -439,6 +459,7 @@ async def resume_task(task_id: str, _auth: str = Depends(verify_api_key), sessio
         raise HTTPException(status_code=409, detail=f"Cannot resume a {task.status} task")
     task.status = "in_progress"
     await session.flush()
+    await _write_log(session, "task.resumed", "task", task.id, {"by": "user"})
     await session.commit()
     return {"id": task.id, "status": task.status}
 
@@ -452,6 +473,7 @@ async def cancel_task(task_id: str, _auth: str = Depends(verify_api_key), sessio
         raise HTTPException(status_code=409, detail=f"Cannot cancel a {task.status} task")
     task.status = "cancelled"
     await session.flush()
+    await _write_log(session, "task.cancelled", "task", task.id, {"by": "user"})
     await session.commit()
     return {"id": task.id, "status": task.status}
 
@@ -613,6 +635,7 @@ async def create_agent(body: CreateAgent, _auth: str = Depends(verify_api_key), 
     )
     session.add(agent)
     await session.flush()
+    await _write_log(session, "agent.created", "agent", agent.id)
     return {"id": agent.id, "name": agent.name, "mode": agent.mode, "status": agent.status}
 
 @app.get("/agents/{agent_id}")
@@ -1009,6 +1032,9 @@ async def respond_approval(approval_id: str, body: RespondApproval, _auth: str =
     approval.reason = body.reason
     approval.responded_at = datetime.now(UTC)
     await session.flush()
+    await _write_log(session, "approval.responded", "approval", approval.id, {
+        "decision": body.decision, "reason": body.reason})
+    await session.commit()
     return {"id": approval.id, "status": approval.status, "reason": approval.reason,
             "responded_at": approval.responded_at.isoformat() if approval.responded_at else None}
 
@@ -1227,6 +1253,28 @@ async def test_event(_auth: str = Depends(verify_api_key), manager: ConnectionMa
     event = {"type": "test", "message": "hello", "timestamp": asyncio.get_event_loop().time()}
     await manager.broadcast(event)
     return {"status": "notified", "event": event}
+
+
+# --- Logs -----------------------------------------------------------------
+
+@app.get("/logs")
+async def list_logs(
+        entity_type: Optional[str] = None,
+        event: Optional[str] = None,
+        limit: int = 50,
+        _auth: str = Depends(verify_api_key),
+        session: AsyncSession = Depends(get_session)):
+    """Fetch recent log entries, newest first."""
+    stmt = select(Log).order_by(Log.created_at.desc()).limit(limit)
+    if entity_type:
+        stmt = stmt.where(Log.entity_type == entity_type)
+    if event:
+        stmt = stmt.where(Log.event == event)
+    result = await session.execute(stmt)
+    return [{"id": l.id, "event": l.event, "entity_type": l.entity_type,
+             "entity_id": l.entity_id, "detail": l.detail,
+             "created_at": l.created_at.isoformat() if l.created_at else None}
+            for l in result.scalars().all()]
 
 
 if __name__ == "__main__":

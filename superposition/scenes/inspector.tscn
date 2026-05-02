@@ -1,0 +1,63 @@
+[gd_scene load_steps=2 format=3 uid="uid://dsp4inspector7q2x"]
+
+[ext_resource type="Script" path="res://scenes/inspector.gd" id="1_inspector"]
+
+[node name="Inspector" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_inspector")
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -4.0
+
+[node name="VB" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="HBoxContainer" parent="Panel/VB"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TypeLabel" type="Label" parent="Panel/VB/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Inspector"
+theme_override_font_sizes/font_size = 18
+metadata/_edit_use_anchors_ = true
+
+[node name="RefreshBtn" type="Button" parent="Panel/VB/Header"]
+layout_mode = 2
+text = "↻"
+
+[node name="IdLabel" type="Label" parent="Panel/VB/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "(no selection)"
+horizontal_alignment = 2
+theme_override_colors/font_color = Color(0.4, 0.4, 0.4, 1)
+
+[node name="Separator" type="HSeparator" parent="Panel/VB"]
+layout_mode = 2
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/VB"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="PropContainer" type="VBoxContainer" parent="Panel/VB/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4

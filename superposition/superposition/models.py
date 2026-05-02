@@ -203,13 +203,24 @@ class Cell(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     chatbook_id = Column(String(36), ForeignKey("chatbooks.id", ondelete="CASCADE"), nullable=False)
     index = Column(Integer, nullable=False, default=0)
-    language = Column(String, nullable=False, default="shell")  # shell, python, etc.
+    language = Column(String, nullable=False, default="shell")
     source = Column(Text, nullable=False)
     output = Column(Text, nullable=True)
-    status = Column(String, nullable=False, default="pending")  # pending, running, success, error
+    status = Column(String, nullable=False, default="pending")
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_utcnow, nullable=False)
 
     chatbook = relationship("Chatbook", back_populates="cells")
     run = relationship("Run", uselist=False, back_populates="cell", cascade="all, delete-orphan")
+
+
+class Log(Base):
+    __tablename__ = "logs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    event = Column(String, nullable=False)
+    entity_type = Column(String, nullable=False)
+    entity_id = Column(String(36), nullable=False)
+    detail = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)

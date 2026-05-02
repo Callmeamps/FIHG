@@ -3,6 +3,7 @@ extends Control
 # Superposition main controller.
 # Routes signals from left rail navigation to swap center viewport content.
 # Terminal dock at bottom is always visible.
+# Inspector panel (right side) shows metadata for selected items.
 # Talks to Python core at http://127.0.0.1:8000
 
 const API_BASE = "http://127.0.0.1:8000"
@@ -15,18 +16,34 @@ var ws_retrying: bool = false
 
 @onready var left_rail: VBoxContainer = %LeftRail
 @onready var center_viewport: Control = %CenterViewport
+@onready var inspector_viewport: Control = %InspectorViewport
 @onready var terminal_dock: Control = %TerminalDock
 
 var current_panel: Control = null
+var inspector_panel: Control = null
 var dashboard_scene = preload("res://scenes/dashboard.tscn")
 var chatbook_scene = preload("res://scenes/chatbook.tscn")
 var projects_scene = preload("res://scenes/projects_view.tscn")
+var activity_scene = preload("res://scenes/activity.tscn")
+var inspector_scene = preload("res://scenes/inspector.tscn")
 
 func _ready():
+	# Wire left rail buttons
 	for button in left_rail.get_children():
 		if button is Button:
 			button.pressed.connect(_on_nav_clicked.bind(button))
+	# Instantiate inspector (shared, always available on right)
+	inspector_panel = inspector_scene.instantiate()
+	inspector_viewport.add_child(inspector_panel)
+	# Start with dashboard
+	switch_panel(dashboard_scene.instantiate())
 	connect_ws()
+
+func switch_panel(panel: Control):
+	if current_panel:
+		current_panel.queue_free()
+	center_viewport.add_child(panel)
+	current_panel = panel
 
 func _on_nav_clicked(button: Button):
 	match button.text:
@@ -36,9 +53,16 @@ func _on_nav_clicked(button: Button):
 			switch_panel(chatbook_scene.instantiate())
 		"Projects":
 			switch_panel(projects_scene.instantiate())
+		"Activity":
+			switch_panel(activity_scene.instantiate())
 		"Agents":
-			# Placeholder — agent system not yet implemented
 			push_warning("Agents view not implemented yet")
+
+# --- Inspector bridge (called from child panels) ---
+
+func inspect(entity_type: String, entity_id: String):
+	if inspector_panel and inspector_panel.has_method("inspect"):
+		inspector_panel.inspect(entity_type, entity_id)
 
 # --- WebSocket connection with reconnect ---
 
