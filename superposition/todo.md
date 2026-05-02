@@ -76,7 +76,7 @@
 - [x] Cell-to-task conversion (Projects-6tm)
 - [x] Task pause/resume/cancel (Projects-wnm)
 ### P3 Frontend
-- [ ] Inspector.tscn + Activity.tscn (Projects-arq)
+- [x] Inspector.tscn + Activity.tscn (Projects-arq)
 
 ## Infrastructure
 - [x] Set up Godot project structure (scenes, UI components)
