@@ -69,8 +69,8 @@
 - [x] Lane endpoints (Projects-tm7)
 - [ ] No CI (Projects-vp1)
 ### P3 Backend
-- [ ] get_session fragile commit pattern (Projects-8w6)
-- [ ] test_models uses AsyncSessionLocal directly (Projects-ilq)
+- [x] get_session fragile commit pattern — removed explicit commits, auto-commit in get_session (Projects-8w6)
+- [x] test_models uses AsyncSessionLocal directly (Projects-ilq) — split into unit + integration tests, get_session fixture in conftest
 - [x] No Makefile shortcuts (Projects-1vq)
 - [x] GET /chatbooks/{id}/messages (Projects-qtp)
 - [x] Cell-to-task conversion (Projects-6tm)
