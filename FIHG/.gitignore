@@ -69,3 +69,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Agent files
+.beads
+SCRATCHPAD.md
+todo.md
