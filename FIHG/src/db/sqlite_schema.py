@@ -86,7 +86,7 @@ class SQLiteSchema:
             )
         """)
         
-        # stv_outcomes table
+        # stv_outcomes table (enhanced)
         await self._db.execute("""
             CREATE TABLE IF NOT EXISTS stv_outcomes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,7 +94,37 @@ class SQLiteSchema:
                 winner TEXT NOT NULL,
                 runner_ups_json TEXT,
                 rejected TEXT,
+                quota REAL NOT NULL,
+                total_votes REAL NOT NULL,
+                scores_json TEXT NOT NULL,
+                transfer_values_json TEXT,
+                status TEXT NOT NULL DEFAULT 'active',
                 timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        
+        # stv_promotions table - tracks runner-up promotions
+        await self._db.execute("""
+            CREATE TABLE IF NOT EXISTS stv_promotions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL,
+                from_winner TEXT NOT NULL,
+                to_runner_up TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                promoted_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        
+        # stv_archived_runner_ups table - stores runner-ups for reuse
+        await self._db.execute("""
+            CREATE TABLE IF NOT EXISTS stv_archived_runner_ups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL,
+                candidate_id TEXT NOT NULL,
+                score REAL NOT NULL,
+                archived_at TEXT NOT NULL DEFAULT (datetime('now')),
+                used BOOLEAN DEFAULT 0,
+                UNIQUE(task_id, candidate_id)
             )
         """)
         
@@ -194,12 +224,24 @@ class SQLiteSchema:
     
     # STV outcomes operations
     async def save_stv_outcome(self, task_id: str, winner: str, 
-                               runner_ups: list[str] = None, rejected: list[str] = None):
+                               runner_ups: list[str] = None, rejected: list[str] = None,
+                               quota: float = None, total_votes: float = None,
+                               scores: dict = None, transfer_values: dict = None):
         """Save STV election outcome"""
         await self._db.execute("""
-            INSERT INTO stv_outcomes (task_id, winner, runner_ups_json, rejected, timestamp)
-            VALUES (?, ?, ?, ?, datetime('now'))
-        """, (task_id, winner, json.dumps(runner_ups or []), json.dumps(rejected or [])))
+            INSERT INTO stv_outcomes 
+            (task_id, winner, runner_ups_json, rejected, quota, total_votes, scores_json, transfer_values_json, status, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', datetime('now'))
+        """, (
+            task_id, 
+            winner, 
+            json.dumps(runner_ups or []), 
+            json.dumps(rejected or []),
+            quota or 0.0,
+            total_votes or 0.0,
+            json.dumps(scores or {}),
+            json.dumps(transfer_values or {})
+        ))
         await self._db.commit()
     
     async def get_stv_outcome(self, task_id: str) -> dict:
@@ -216,6 +258,100 @@ class SQLiteSchema:
                 "winner": row[2],
                 "runner_ups": json.loads(row[3]) if row[3] else [],
                 "rejected": json.loads(row[4]) if row[4] else [],
-                "timestamp": row[5]
+                "quota": row[5],
+                "total_votes": row[6],
+                "scores": json.loads(row[7]) if row[7] else {},
+                "transfer_values": json.loads(row[8]) if row[8] else {},
+                "status": row[9],
+                "timestamp": row[10]
             }
         return None
+    
+    async def update_stv_winner(self, task_id: str, new_winner: str, reason: str = None):
+        """Update winner status (e.g., on promotion)"""
+        await self._db.execute(
+            "UPDATE stv_outcomes SET winner = ? WHERE task_id = ? AND status = 'active'",
+            (new_winner, task_id)
+        )
+        await self._db.commit()
+        
+        # Log promotion if reason provided
+        if reason:
+            await self.log_event(
+                fihg="stv",
+                event_type="runner_up_promotion",
+                payload={"task_id": task_id, "new_winner": new_winner, "reason": reason}
+            )
+    
+    async def archive_stv_outcome(self, task_id: str):
+        """Archive STV outcome (mark as inactive)"""
+        await self._db.execute(
+            "UPDATE stv_outcomes SET status = 'archived' WHERE task_id = ? AND status = 'active'",
+            (task_id,)
+        )
+        await self._db.commit()
+    
+    # STV promotions operations
+    async def log_promotion(self, task_id: str, from_winner: str, to_runner_up: str, reason: str):
+        """Log a runner-up promotion"""
+        await self._db.execute("""
+            INSERT INTO stv_promotions (task_id, from_winner, to_runner_up, reason, promoted_at)
+            VALUES (?, ?, ?, ?, datetime('now'))
+        """, (task_id, from_winner, to_runner_up, reason))
+        await self._db.commit()
+    
+    async def get_promotions(self, task_id: str) -> list[dict]:
+        """Get promotion history for a task"""
+        cursor = await self._db.execute(
+            "SELECT * FROM stv_promotions WHERE task_id = ? ORDER BY promoted_at DESC",
+            (task_id,)
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "id": r[0], "task_id": r[1], "from_winner": r[2],
+                "to_runner_up": r[3], "reason": r[4], "promoted_at": r[5]
+            }
+            for r in rows
+        ]
+    
+    # STV archived runner-ups operations
+    async def archive_runner_up(self, task_id: str, candidate_id: str, score: float):
+        """Archive a runner-up for potential reuse"""
+        await self._db.execute("""
+            INSERT OR IGNORE INTO stv_archived_runner_ups (task_id, candidate_id, score, archived_at)
+            VALUES (?, ?, ?, datetime('now'))
+        """, (task_id, candidate_id, score))
+        await self._db.commit()
+    
+    async def archive_all_runner_ups(self, task_id: str, runner_ups: list[str], scores: dict):
+        """Archive all runner-ups from a run"""
+        for candidate_id in runner_ups:
+            score = scores.get(candidate_id, 0.0)
+            await self.archive_runner_up(task_id, candidate_id, score)
+    
+    async def get_archived_runner_ups(self, task_id: str, unused_only: bool = True) -> list[dict]:
+        """Retrieve archived runner-ups for a task"""
+        query = "SELECT * FROM stv_archived_runner_ups WHERE task_id = ?"
+        params = [task_id]
+        if unused_only:
+            query += " AND used = 0"
+        query += " ORDER BY score DESC"
+        
+        cursor = await self._db.execute(query, params)
+        rows = await cursor.fetchall()
+        return [
+            {
+                "id": r[0], "task_id": r[1], "candidate_id": r[2],
+                "score": r[3], "archived_at": r[4], "used": bool(r[5])
+            }
+            for r in rows
+        ]
+    
+    async def mark_archived_runner_up_used(self, archive_id: int):
+        """Mark an archived runner-up as used"""
+        await self._db.execute(
+            "UPDATE stv_archived_runner_ups SET used = 1 WHERE id = ?",
+            (archive_id,)
+        )
+        await self._db.commit()
