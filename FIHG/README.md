@@ -1,88 +1,109 @@
-# FIHG PRD Bundle
+# FIHG — First-Class Interhypergraph Grid
 
-## Project goal
+A modular synth architecture with three first-class interhypergraph domains, connected through an overarching graph-of-graphs system.
 
-Build a modular synth architecture made of three first-class interhypergraph domains, or **FIHGs**:
+## Architecture
 
-- **Identity FIHG**: governs outward behavior, style, priorities, arbitration, and control.
-- **Memory FIHG**: stores episodic, semantic, temporal, and trust-linked memory, with recall pathways.
-- **Skills FIHG**: models capabilities, dependencies, confidence, and skill transfer.
+Three independent FIHG graphs, each owning its domain:
 
-These three FIHGs are connected through an overarching synth architecture so they can coordinate without collapsing into one flat system.
+| Graph | Domain | Purpose |
+|-------|--------|---------|
+| **Identity** | Persona & control | Governs outward behavior, style, priorities, arbitration |
+| **Memory** | Storage & recall | Episodic, semantic, temporal, and trust-linked memory |
+| **Skills** | Capabilities | Models skills, dependencies, confidence, and transfer |
+
+Connected by explicit bridge edges — never collapsed into one flat graph.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Language | Python |
+| Language | Python 3.12+ |
 | Graph DB | ArcadeDB (3 separate graphs) |
 | Query Language | Gremlin |
 | Python Client | gremlinpython (Apache TinkerPop) |
 | Peripheral Storage | SQLite |
-| Implementation | Python layer for STV, business logic |
 
-## Files included
+## Project Structure
 
-- `PRD_Identity_FIHG.md`
-- `PRD_Memory_FIHG.md`
-- `PRD_Skills_FIHG.md`
-- `Spec_Overarching_FIHG_Architecture.md`
+```
+FIHG/
+├── src/
+│   ├── core/                    # Shared primitives & cross-cutting concerns
+│   │   ├── base.py              # BaseNode, BaseEdge, BaseHyperedge, GraphState
+│   │   ├── bridges.py           # Cross-graph traversal and bridge managers
+│   │   ├── decay.py             # DecayEngine — freshness & wear scoring
+│   │   ├── hyperedges.py        # HyperedgeManager — multi-party events
+│   │   ├── metrics.py           # Metrics aggregation per graph
+│   │   ├── replay.py            # ReplayEngine — event history & summarization
+│   │   └── subgraphs.py         # SubgraphManager — recursive subgraphs
+│   ├── db/
+│   │   ├── arcadedb.py          # ArcadeDB connection layer
+│   │   ├── sqlite_schema.py     # SQLite schema (event_log, session_state)
+│   │   ├── event_log.py         # EventLogQuerier — querying & aggregation
+│   │   └── session_state.py     # SessionStateManager — cross-graph persistence
+│   └── fihg/
+│       ├── identity/            # Identity FIHG — STV voting, client
+│       ├── memory/              # Memory FIHG — retrieval, client
+│       └── skills/              # Skills FIHG — routing, client
+├── tests/                       # Full test suite (130 tests)
+├── fihg_holistic.md             # Architecture overview
+├── PRD_Identity_FIHG.md         # Identity domain spec
+├── PRD_Memory_FIHG.md           # Memory domain spec
+├── PRD_Skills_FIHG.md           # Skills domain spec
+└── README.md
+```
 
-## Glossary
+## Completion Status
 
-**FIHG**  
-First-Class Interhypergraph. A graph-of-graphs architecture where a domain is treated as its own recursive, layered network.
+### Phase 1 — Foundation ✅
+- ArcadeDB 3-graph setup
+- SQLite schema (event_log, session_state)
+- Python scaffolding with pydantic models
+- Identity FIHG schema + STV voting base
+- Memory FIHG schema + retrieval
+- Skills FIHG schema + routing
 
-**Synth**  
-A composite system with one external identity and multiple internal capabilities, agents, and control layers.
+### Phase 2 — Core ✅
+- Cross-graph Gremlin bridge traversals
+- STV enhancements: Droop quota, transfer values, runner-up storage
+- Metrics aggregation per graph (activity, skill stats, memory retrieval, identity confidence)
+- Event log querying with time windows, filters, aggregation
+- Session state persistence across all 3 FIHG graphs
 
-**Intergraph**  
-A graph that connects to other graphs. Used for bridging domains, layers, or subsystems.
+### Phase 3 — Polish ✅
+- Hyperedge manager for multi-party events (create, query, resolve, stats)
+- Recursive subgraph support (CRUD, merge, archive, entity tracking)
+- Decay & wear scoring engine (exponential half-life freshness, error-ratio wear, batch operations)
+- Replay & summarization (event timeline, session summary, graph activity reports, JSON export)
 
-**Hypergraph**  
-A graph where a single edge can connect more than two nodes at once. Useful for events, groups, and shared states.
+### Phase 4 — Advanced _(not started)_
+- Cross-FIHG learning
+- Automatic candidate promotion
+- Adaptive governance
 
-Nodes express their properties visually — quantity, connectivity, eccentricity, relevance shown as size, shape, texture, orientation. Edges carry rich metadata: type, stability, longevity, progress, status, activity, wave edges, variable thickness, color, radiance.
+## Key Concepts
 
-**Hyperedge**  
-The multi-node relationship inside a hypergraph.
+| Term | Meaning |
+|------|---------|
+| **FIHG** | First-Class Interhypergraph — a domain as its own recursive, layered network |
+| **Synth** | Composite system with external identity + internal capabilities |
+| **Hyperedge** | Multi-node relationship inside a hypergraph (events, groups, shared states) |
+| **Bridge** | Connection between FIHG graphs |
+| **STV** | Single Transferable Vote — conflict resolution across candidate responses |
+| **Fractal** | Subgraphs containing subgraphs of the same kind |
+| **Wear** | Accumulated degradation from activity and errors |
+| **Clarity/Brightness** | Live state signal for node/edge health |
 
-**Identity FIHG**  
-The domain that controls the synth's outward persona, priorities, policies, and response shaping.
+## Running Tests
 
-**Memory FIHG**  
-The domain that manages episodes, facts, meaning, trust, decay, and retrieval pathways.
+```bash
+cd FIHG
+python -m pytest tests/ -v
+```
 
-**Skills FIHG**  
-The domain that models what the synth can do, how skills depend on each other, and how capability changes over time.
+130 tests, all passing.
 
-**Node**  
-A thing, concept, agent, or state object inside the graph.
+## Design Principle
 
-**Edge**  
-A relationship between nodes. Can carry metadata, direction, weight, or multiple weights.
-
-**Weight**  
-A numerical or symbolic measure attached to a relationship, such as trust, latency, frequency, or cost.
-
-**Metadata**  
-Extra information attached to a node, edge, or hyperedge.
-
-**Traffic**  
-Activity flowing through nodes or edges. High traffic usually means high use.
-
-**Wear**  
-Accumulated load, strain, or degradation from repeated activity.
-
-**Clarity / Brightness**  
-A live state signal for how active, fresh, visible, or healthy a node or edge is.
-
-**Bridge**  
-A connection between FIHGs, such as Memory feeding Identity or Skills informing task selection. Bridges also link hypergraphs to external models or synths.
-
-**Fractal**  
-A structure that repeats at multiple scales. In this project, subgraphs can contain subgraphs of the same kind.
-
-## Notes
-
-This bundle is designed as a working architecture document set, not a final implementation.
+> Do not collapse everything into one giant graph. Let each FIHG own its own domain, then connect them with explicit bridge edges. That keeps the system recursive, debuggable, and extensible.
