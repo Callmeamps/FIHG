@@ -1,6 +1,10 @@
 """Core module - shared primitives and cross-graph bridges"""
 
 from .base import BaseNode, BaseEdge, BaseHyperedge, GraphState
+from .hyperedges import HyperedgeManager
+from .decay import DecayEngine
+from .replay import ReplayEngine
+from .subgraphs import SubgraphManager, Subgraph
 from .bridges import (
     BridgeResult,
     IdentityMemoryBridge,
@@ -21,6 +25,11 @@ __all__ = [
     "BaseEdge",
     "BaseHyperedge",
     "GraphState",
+    "HyperedgeManager",
+    "DecayEngine",
+    "ReplayEngine",
+    "SubgraphManager",
+    "Subgraph",
     "BridgeResult",
     "IdentityMemoryBridge",
     "IdentitySkillsBridge",
