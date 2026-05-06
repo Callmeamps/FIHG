@@ -2,7 +2,7 @@
 
 from typing import Optional
 from datetime import datetime
-from ..db.arcadedb import ArcadeDBClient
+from ...db.arcadedb import ArcadeDBClient
 
 
 class SkillsFIHGClient:

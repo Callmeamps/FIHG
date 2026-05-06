@@ -9,6 +9,12 @@ from .bridges import (
     CrossGraphTraversal,
     CrossGraphBridgeManager,
 )
+from .metrics import (
+    aggregate_fihg_metrics,
+    get_skill_activation_stats,
+    get_memory_retrieval_stats,
+    get_identity_confidence_stats,
+)
 
 __all__ = [
     "BaseNode",
@@ -21,4 +27,8 @@ __all__ = [
     "MemorySkillsBridge",
     "CrossGraphTraversal",
     "CrossGraphBridgeManager",
+    "aggregate_fihg_metrics",
+    "get_skill_activation_stats",
+    "get_memory_retrieval_stats",
+    "get_identity_confidence_stats",
 ]

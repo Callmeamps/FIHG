@@ -1,7 +1,7 @@
 """STV (Single Transferable Vote) implementation for conflict resolution"""
 
 from typing import Optional
-from ..db.sqlite_schema import SQLiteSchema
+from ...db.sqlite_schema import SQLiteSchema
 
 
 class STVVoting:

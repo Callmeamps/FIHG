@@ -1,7 +1,7 @@
 """Identity FIHG client"""
 
 from typing import Optional
-from ..db.arcadedb import ArcadeDBClient
+from ...db.arcadedb import ArcadeDBClient
 
 
 class IdentityFIHGClient:
