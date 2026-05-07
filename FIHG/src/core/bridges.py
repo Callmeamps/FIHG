@@ -52,7 +52,7 @@ SKILL_BY_ID: str = "g.V().has('skill', 'id', :skill_id)"
 
 EPISODE_BY_SKILL_NAME: str = """
 g.V().has('skill_episode', 'skill_name', :skill_name)
-  .has('success', true)
+  .has('success', 'True')
   .order().by('timestamp', decr)
   .limit(:limit)
 """
@@ -63,9 +63,9 @@ g.V().has('fact', 'predicate', 'skill_example')
   .limit(:limit)
 """
 
-SKILL_EPISODE_COUNT: str = "g.V().has('skill_episode', 'skill_id', :skill_id).has('success', true).count()"
+SKILL_EPISODE_COUNT: str = "g.V().has('skill_episode', 'skill_id', :skill_id).has('success', 'True').count()"
 
-SKILL_FAILURE_COUNT: str = "g.V().has('skill_episode', 'skill_id', :skill_id).has('success', false).count()"
+SKILL_FAILURE_COUNT: str = "g.V().has('skill_episode', 'skill_id', :skill_id).has('success', 'False').count()"
 
 SKILL_UPDATE_CONFIDENCE: str = """
 g.V().has('skill', 'id', :skill_id)
@@ -385,8 +385,7 @@ class MemorySkillsBridge:
         Returns:
             BridgeResult with the created episode
         """
-        skill_query = f"g.V().has('skill', 'id', '{skill_id}')"
-        skill_results = await self.skills.execute(skill_query)
+        skill_results = await self.skills.execute(SKILL_BY_ID, {"skill_id": skill_id})
         
         skill_name = ""
         if skill_results:
@@ -406,23 +405,22 @@ class MemorySkillsBridge:
             "output_summary": str(result.get("output_summary", ""))[:500],
         }
         
-        props_str = ", ".join([f"'{k}', '{v}'" for k, v in props.items()])
-        query = f"g.addV('skill_episode').property({props_str})"
-        
-        episode_result = await self.memory.execute(query)
+        query = "g.addV('skill_episode')"
+        for key, value in props.items():
+            query += f".property('{key}', :{key})"
+        episode_result = await self.memory.execute(query, props)
         
         if episode_result and skill_results:
             episode_id = episode_result[0].get("id", "")
             skill_vertex_id = skill_results[0].get("id", "")
             
-            edge_query = (
-                f"g.V('{episode_id}').addE('executed_skill')"
-                f".to(g.V('{skill_vertex_id}'))"
-                f".property('outcome', '{event_type}')"
-                f".property('timestamp', '{datetime.utcnow().isoformat()}')"
-            )
-            
-            await self.memory.execute(edge_query)
+            edge_bindings = {
+                "episode_id": episode_id,
+                "skill_id": skill_vertex_id,
+                "outcome": event_type,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+            await self.memory.execute(EXECUTED_SKILL_EDGE, edge_bindings)
         
         return BridgeResult(
             source_graph="skills",
@@ -446,22 +444,9 @@ class MemorySkillsBridge:
         Returns:
             BridgeResult with relevant episodes
         """
-        episodes_query = (
-            f"g.V().has('skill_episode', 'skill_name', '{skill_name}')"
-            f".has('success', 'True')"
-            f".order().by('timestamp', decr)"
-            f".limit({limit})"
-        )
+        episodes = await self.memory.execute(EPISODE_BY_SKILL_NAME, {"skill_name": skill_name, "limit": limit})
         
-        episodes = await self.memory.execute(episodes_query)
-        
-        facts_query = (
-            f"g.V().has('fact', 'predicate', 'skill_example')"
-            f".has('object', '{skill_name}')"
-            f".limit({limit})"
-        )
-        
-        facts = await self.memory.execute(facts_query)
+        facts = await self.memory.execute(FACTS_BY_PREDICATE_OBJECT, {"skill_name": skill_name, "limit": limit})
         
         return BridgeResult(
             source_graph="skills",
@@ -490,18 +475,8 @@ class MemorySkillsBridge:
         Returns:
             BridgeResult with updated skill info
         """
-        success_episodes_query = (
-            f"g.V().has('skill_episode', 'skill_id', '{skill_id}')"
-            f".has('success', 'True').count()"
-        )
-        
-        failure_episodes_query = (
-            f"g.V().has('skill_episode', 'skill_id', '{skill_id}')"
-            f".has('success', 'False').count()"
-        )
-        
-        success_count = await self.memory.execute(success_episodes_query)
-        failure_count = await self.memory.execute(failure_episodes_query)
+        success_count = await self.memory.execute(SKILL_EPISODE_COUNT, {"skill_id": skill_id})
+        failure_count = await self.memory.execute(SKILL_FAILURE_COUNT, {"skill_id": skill_id})
         
         total = (success_count[0] if success_count else 0) + (failure_count[0] if failure_count else 0)
         success_rate = (success_count[0] / total) if total > 0 else 0.5
@@ -515,13 +490,12 @@ class MemorySkillsBridge:
         
         new_confidence = max(0.0, min(1.0, success_rate + confidence_delta))
         
-        update_query = (
-            f"g.V().has('skill', 'id', '{skill_id}')"
-            f".property('confidence', {new_confidence})"
-            f".property('last_practiced_at', '{datetime.utcnow().isoformat()}')"
-        )
-        
-        result = await self.skills.execute(update_query)
+        update_bindings = {
+            "skill_id": skill_id,
+            "confidence": new_confidence,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        result = await self.skills.execute(SKILL_UPDATE_CONFIDENCE, update_bindings)
         
         return BridgeResult(
             source_graph="memory",
