@@ -155,8 +155,7 @@ class IdentityMemoryBridge:
         Returns:
             BridgeResult with relevant preferences and facts
         """
-        persona_query = f"g.V().has('persona', 'id', '{persona_id}')"
-        persona_results = await self.identity.execute(persona_query)
+        persona_results = await self.identity.execute(PERSONA_BY_ID, {"persona_id": persona_id})
         
         if not persona_results:
             return BridgeResult(
@@ -168,13 +167,7 @@ class IdentityMemoryBridge:
         
         persona_name = persona_results[0].get("name", "")
         
-        preferences_query = (
-            f"g.V().has('preference', 'entity', '{persona_name}')"
-            f".order().by('strength', decr)"
-            f".limit({limit})"
-        )
-        
-        preferences = await self.memory.execute(preferences_query)
+        preferences = await self.memory.execute(PREFERENCES_QUERY, {"persona_name": persona_name, "limit": limit})
         
         return BridgeResult(
             source_graph="identity",
@@ -213,10 +206,11 @@ class IdentityMemoryBridge:
             for key, value in context.items():
                 props[f"context_{key}"] = str(value)
         
-        props_str = ", ".join([f"'{k}', '{v}'" for k, v in props.items()])
-        query = f"g.addV('decision_episode').property({props_str})"
+        query = "g.addV('decision_episode')"
+        for key in props:
+            query += f".property('{key}', :{key})"
         
-        result = await self.memory.execute(query)
+        result = await self.memory.execute(query, props)
         
         return BridgeResult(
             source_graph="identity",
