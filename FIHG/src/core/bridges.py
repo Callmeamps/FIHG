@@ -7,6 +7,78 @@ from dataclasses import dataclass, field
 from ..db.arcadedb import ArcadeDBClient, FIHGGraphManager
 from ..core.base import BaseNode, BaseEdge
 
+# Gremlin query templates for parameterized execution
+
+STYLE_QUERY: str = "g.V().has('style', 'id', :style_id)"
+
+STYLE_EPISODES_QUERY: str = """
+g.V().has('style', 'id', :style_id).as('s')
+  .V().has('episode', 'event_type', within('conversation', 'interaction'))
+  .has('style_used', s.name)
+  .order().by('timestamp', decr)
+  .limit(:limit)
+"""
+
+STYLE_FACTS_QUERY: str = """
+g.V().has('fact', 'predicate', 'response_style_preference')
+  .has('object', :style_name)
+  .limit(:limit)
+"""
+
+PERSONA_BY_ID: str = "g.V().has('persona', 'id', :persona_id)"
+
+PREFERENCES_QUERY: str = """
+g.V().has('preference', 'entity', :persona_name)
+  .order().by('strength', decr)
+  .limit(:limit)
+"""
+
+DELEGATION_SLOT_BY_ID: str = "g.V().has('delegation_slot', 'id', :slot_id)"
+
+SKILL_BY_NAME_PROJECT: str = """
+g.V().has('skill', 'name', :skill_name)
+  .project('id', 'name', 'category', 'confidence', 'evidence_count', 'decay')
+  .by('id').by('name').by('category').by('confidence').by('evidence_count').by('decay')
+"""
+
+POLICY_BY_ID: str = "g.V().has('policy', 'id', :policy_id)"
+
+SKILLS_BY_CATEGORY: str = """
+g.V().has('skill', 'category', within(:categories))
+  .order().by('confidence', decr)
+"""
+
+SKILL_BY_ID: str = "g.V().has('skill', 'id', :skill_id)"
+
+EPISODE_BY_SKILL_NAME: str = """
+g.V().has('skill_episode', 'skill_name', :skill_name)
+  .has('success', true)
+  .order().by('timestamp', decr)
+  .limit(:limit)
+"""
+
+FACTS_BY_PREDICATE_OBJECT: str = """
+g.V().has('fact', 'predicate', 'skill_example')
+  .has('object', :skill_name)
+  .limit(:limit)
+"""
+
+SKILL_EPISODE_COUNT: str = "g.V().has('skill_episode', 'skill_id', :skill_id).has('success', true).count()"
+
+SKILL_FAILURE_COUNT: str = "g.V().has('skill_episode', 'skill_id', :skill_id).has('success', false).count()"
+
+SKILL_UPDATE_CONFIDENCE: str = """
+g.V().has('skill', 'id', :skill_id)
+  .property('confidence', :confidence)
+  .property('last_practiced_at', :timestamp)
+"""
+
+EXECUTED_SKILL_EDGE: str = """
+g.V(:episode_id).addE('executed_skill').to(g.V(:skill_id))
+  .property('outcome', :outcome)
+  .property('timestamp', :timestamp)
+"""
+
 
 @dataclass
 class BridgeResult:
