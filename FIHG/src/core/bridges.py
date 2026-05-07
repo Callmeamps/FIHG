@@ -114,8 +114,7 @@ class IdentityMemoryBridge:
         Returns:
             BridgeResult with relevant episodes and facts
         """
-        style_query = f"g.V().has('style', 'id', '{style_id}')"
-        style_results = await self.identity.execute(style_query)
+        style_results = await self.identity.execute(STYLE_QUERY, {"style_id": style_id})
         
         if not style_results:
             return BridgeResult(
@@ -127,22 +126,9 @@ class IdentityMemoryBridge:
         
         style_name = style_results[0].get("name", "") if style_results else ""
         
-        memory_query = (
-            f"g.V().has('episode', 'event_type', within('conversation', 'interaction'))"
-            f".has('style_used', '{style_name}')"
-            f".order().by('timestamp', decr)"
-            f".limit({limit})"
-        )
+        episodes = await self.memory.execute(STYLE_EPISODES_QUERY, {"style_id": style_id, "limit": limit})
         
-        episodes = await self.memory.execute(memory_query)
-        
-        facts_query = (
-            f"g.V().has('fact', 'predicate', 'response_style_preference')"
-            f".has('object', '{style_name}')"
-            f".limit({limit})"
-        )
-        
-        facts = await self.memory.execute(facts_query)
+        facts = await self.memory.execute(STYLE_FACTS_QUERY, {"style_name": style_name, "limit": limit})
         
         return BridgeResult(
             source_graph="identity",
