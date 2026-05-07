@@ -1,35 +1,92 @@
 """Metrics aggregation functions for FIHG domains"""
 
+import sqlite3
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
 
 
-def aggregate_fihg_metrics(graph_name: str, time_window: Optional[timedelta] = None) -> Dict:
-    """Aggregate metrics for a given FIHG graph.
-    
+def aggregate_fihg_metrics(
+    graph_name: str,
+    time_window: Optional[timedelta] = None,
+    db_path: str = "fihg.db"
+) -> Dict:
+    """Aggregate metrics for a given FIHG graph by querying the event_log.
+
     Args:
         graph_name: Name of the FIHG graph ("identity", "memory", "skills").
         time_window: Optional time window to filter metrics.
-        
+        db_path: Path to SQLite database file (default: "fihg.db").
+
     Returns:
         Dictionary with aggregated metrics including activity_count, error_count,
-        success_rate, and average wear across the graph.
+        success_rate, average wear, average freshness, and entity_count.
     """
     if graph_name not in ("identity", "memory", "skills"):
         raise ValueError(f"Unknown graph_name: {graph_name}. Must be one of: identity, memory, skills")
 
-    cutoff = datetime.utcnow() - time_window if time_window else None
+    # Ensure event_log table exists (create if missing)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS event_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            fihg TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            payload_json TEXT
+        );
+        """
+    )
+    conn.commit()
+
+    cutoff_dt = datetime.utcnow() - time_window if time_window else None
+    cutoff_str = cutoff_dt.strftime("%Y-%m-%d %H:%M:%S") if cutoff_dt else None
+
+    conditions = ["fihg = ?"]
+    params = [graph_name]
+    if cutoff_str:
+        conditions.append("timestamp >= ?")
+        params.append(cutoff_str)
+    where_clause = " AND ".join(conditions)
+
+    # activity count
+    cur = conn.execute(f"SELECT COUNT(*) FROM event_log WHERE {where_clause}", params)
+    activity_count = cur.fetchone()[0]
+
+    # error count (event_type contains 'error')
+    err_params = params.copy()
+    cur = conn.execute(
+        f"SELECT COUNT(*) FROM event_log WHERE {where_clause} AND event_type LIKE '%error%'",
+        err_params
+    )
+    error_count = cur.fetchone()[0]
+
+    success_rate = 1.0 - (error_count / activity_count) if activity_count > 0 else 1.0
+
+    # Entity count from metrics table (if exists)
+    try:
+        cur = conn.execute("SELECT COUNT(DISTINCT entity_id) FROM metrics WHERE fihg = ?", (graph_name,))
+        entity_count = cur.fetchone()[0] or 0
+    except sqlite3.OperationalError:
+        entity_count = 0
+
+    # Average wear and freshness not stored centrally; use placeholders
+    average_wear = 0.0
+    average_freshness = 1.0
+
+    conn.close()
 
     return {
         "graph_name": graph_name,
         "time_window": time_window,
-        "cutoff_time": cutoff,
-        "activity_count": 0,
-        "error_count": 0,
-        "success_rate": 1.0,
-        "average_wear": 0.0,
-        "average_freshness": 1.0,
-        "entity_count": 0,
+        "cutoff_time": cutoff_dt,
+        "activity_count": activity_count,
+        "error_count": error_count,
+        "success_rate": success_rate,
+        "average_wear": average_wear,
+        "average_freshness": average_freshness,
+        "entity_count": entity_count,
         "computed_at": datetime.utcnow(),
     }
 
