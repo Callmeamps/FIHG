@@ -48,14 +48,37 @@ class SkillsFIHGClient:
             "date": datetime.utcnow().isoformat()
         })
     
-    async def update_skill_confidence(self, skill_id: str, 
+    async def update_skill_confidence(self, skill_id: str,
                                      success: bool, latency: float = None):
-        """Update skill confidence based on execution result"""
-        # Calculate new confidence
-        # If success: increase confidence
-        # If failure: decrease confidence
-        # Apply decay if not used recently
-        pass
+        """Update skill confidence based on execution result.
+        
+        - Increases confidence by +0.05 on success
+        - Decreases by -0.1 on failure
+        - Updates last_practiced_at to now
+        """
+        from datetime import datetime
+        # Fetch current confidence
+        result = await self.graph.execute(
+            "g.V(:id).valueMap(true)",
+            {"id": skill_id}
+        )
+        if not result:
+            return
+        props = result[0]
+        current_conf = float(props.get("confidence", 0.5))
+        
+        delta = 0.05 if success else -0.1
+        new_conf = max(0.0, min(1.0, current_conf + delta))
+        
+        # Update confidence and last_practiced_at atomically
+        await self.graph.execute(
+            "g.V(:skill_id).property('confidence', :confidence).property('last_practiced_at', :timestamp)",
+            {
+                "skill_id": skill_id,
+                "confidence": new_conf,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
     
     async def get_skill_dependencies(self, skill_name: str) -> list[dict]:
         """Get all dependencies of a skill"""
