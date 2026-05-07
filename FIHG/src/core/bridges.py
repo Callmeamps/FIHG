@@ -244,8 +244,7 @@ class IdentitySkillsBridge:
         Returns:
             BridgeResult with skill verification status
         """
-        slot_query = f"g.V().has('delegation_slot', 'id', '{delegation_slot_id}')"
-        slot_results = await self.identity.execute(slot_query)
+        slot_results = await self.identity.execute(DELEGATION_SLOT_BY_ID, {"slot_id": delegation_slot_id})
         
         if not slot_results:
             return BridgeResult(
@@ -258,13 +257,7 @@ class IdentitySkillsBridge:
         slot = slot_results[0]
         agent_type = slot.get("agent_type", "")
         
-        skill_query = (
-            f"g.V().has('skill', 'name', '{required_skill}')"
-            f".project('id', 'name', 'category', 'confidence', 'evidence_count', 'decay')"
-            f".by('id').by('name').by('category').by('confidence').by('evidence_count').by('decay')"
-        )
-        
-        skill_results = await self.skills.execute(skill_query)
+        skill_results = await self.skills.execute(SKILL_BY_NAME_PROJECT, {"skill_name": required_skill})
         
         if not skill_results:
             return BridgeResult(
@@ -305,8 +298,7 @@ class IdentitySkillsBridge:
         Returns:
             BridgeResult with applicable skills
         """
-        policy_query = f"g.V().has('policy', 'id', '{policy_id}')"
-        policy_results = await self.identity.execute(policy_query)
+        policy_results = await self.identity.execute(POLICY_BY_ID, {"policy_id": policy_id})
         
         if not policy_results:
             return BridgeResult(
@@ -320,12 +312,7 @@ class IdentitySkillsBridge:
         conditions = policy.get("conditions", "")
         policy_name = policy.get("name", "")
         
-        skills_query = (
-            f"g.V().has('skill', 'category', within({conditions}))"
-            f".order().by('confidence', decr)"
-        )
-        
-        skills = await self.skills.execute(skills_query)
+        skills = await self.skills.execute(SKILLS_BY_CATEGORY, {"categories": conditions})
         
         return BridgeResult(
             source_graph="identity",
@@ -358,10 +345,10 @@ class IdentitySkillsBridge:
             "source_graph": "identity"
         }
         
-        props_str = ", ".join([f"'{k}', '{v}'" for k, v in props.items()])
-        query = f"g.addV('skill_usage_record').property({props_str})"
-        
-        result = await self.skills.execute(query)
+        query = "g.addV('skill_usage_record')"
+        for key in props:
+            query += f".property('{key}', :{key})"
+        result = await self.skills.execute(query, props)
         
         return BridgeResult(
             source_graph="identity",
