@@ -81,6 +81,29 @@ class SkillsFIHGClient:
         )
     
     async def get_skill_dependencies(self, skill_name: str) -> list[dict]:
-        """Get all dependencies of a skill"""
-        # Traverse depends_on edges
-        pass
+        """Get all dependencies of a skill.
+        
+        Returns list of dicts with keys: skill_id, name, category, strength
+        """
+        # Find the skill by name to get its id
+        result = await self.graph.execute(
+            "g.V().has('skill', 'name', :name).limit(1)",
+            {"name": skill_name}
+        )
+        if not result:
+            return []
+        skill_vertex = result[0]
+        skill_id = skill_vertex.get('id')
+        if not skill_id:
+            return []
+        # Traverse depends_on edges and collect target skill properties with edge strength
+        deps = await self.graph.execute(
+            "g.V(:skill_id).outE('depends_on').as('e').inV()"
+            ".project('skill_id','name','category','strength')"
+            ".by('id').by('name').by('category').by(select('e').values('strength'))",
+            {"skill_id": skill_id}
+        )
+        # Ensure list of dict
+        if deps is None:
+            deps = []
+        return deps
